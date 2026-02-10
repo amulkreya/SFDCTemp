@@ -6,26 +6,31 @@ const { Pool } = pkg;
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-/* ---------------- DB Connection ---------------- */
+/* =====================================================
+   DATABASE CONNECTION
+===================================================== */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-/* ---------------- Middleware ---------------- */
+/* =====================================================
+   MIDDLEWARE
+===================================================== */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
-/* ---------------- Root Redirect ---------------- */
+/* =====================================================
+   ROOT
+===================================================== */
 app.get("/", (req, res) => {
   res.redirect("/login.html");
 });
 
 /* =====================================================
-   SALESFORCE AUTH (ONE-TIME SESSION CACHED)
+   SALESFORCE SESSION (CACHED)
 ===================================================== */
-
 let sfAccessToken = null;
 let sfInstanceUrl = null;
 
@@ -53,8 +58,8 @@ async function getSalesforceSession() {
 
   const data = await response.json();
 
-  if (!data.access_token) {
-    throw new Error("Failed to authenticate with Salesforce");
+  if (!data.access_token || !data.instance_url) {
+    throw new Error("Salesforce authentication failed");
   }
 
   sfAccessToken = data.access_token;
@@ -64,7 +69,7 @@ async function getSalesforceSession() {
 }
 
 /* =====================================================
-   LOGIN API
+   LOGIN (ADMIN ONLY)
 ===================================================== */
 app.post("/login", async (req, res) => {
   try {
@@ -78,8 +83,10 @@ app.post("/login", async (req, res) => {
 
     await pool.query(
       `
-      INSERT INTO sfdc_contacts (username, role, session_id, loggedin_at, active)
-      VALUES ($1, 'Admin', $2, CURRENT_TIMESTAMP, true)
+      INSERT INTO sfdc_contacts
+        (username, role, session_id, loggedin_at, active)
+      VALUES
+        ($1, 'Admin', $2, CURRENT_TIMESTAMP, true)
       ON CONFLICT (username)
       DO UPDATE SET
         session_id = EXCLUDED.session_id,
@@ -97,7 +104,7 @@ app.post("/login", async (req, res) => {
 });
 
 /* =====================================================
-   FETCH USERS (ADMIN ONLY)
+   FETCH USERS (ADMIN AUTH)
 ===================================================== */
 app.get("/api/users", async (req, res) => {
   const { sessionId } = req.query;
@@ -117,13 +124,14 @@ app.get("/api/users", async (req, res) => {
 
   const users = await pool.query(
     `
-    SELECT salesforce_id,
-           emailid,
-           username,
-           firstname,
-           lastname,
-           role,
-           active
+    SELECT
+      salesforce_id,
+      emailid,
+      username,
+      firstname,
+      lastname,
+      role,
+      active
     FROM sfdc_contacts
     ORDER BY created_at DESC
     `
@@ -133,12 +141,13 @@ app.get("/api/users", async (req, res) => {
 });
 
 /* =====================================================
-   SALESFORCE SYNC (BUTTON CLICK)
+   SALESFORCE → POSTGRES SYNC (BUTTON)
 ===================================================== */
 app.post("/api/sync-salesforce", async (req, res) => {
   try {
     const { sessionId } = req.body;
 
+    /* ---- Admin Validation ---- */
     const adminCheck = await pool.query(
       `
       SELECT 1
@@ -152,9 +161,11 @@ app.post("/api/sync-salesforce", async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
+    /* ---- Salesforce Login ---- */
     const { sfAccessToken, sfInstanceUrl } =
       await getSalesforceSession();
 
+    /* ---- Fetch Contacts ---- */
     const soql = `
       SELECT Id, FirstName, LastName, Email, Sync__c
       FROM Contact
@@ -171,10 +182,12 @@ app.post("/api/sync-salesforce", async (req, res) => {
     );
 
     const sfData = await sfResponse.json();
+    const records = sfData.records || [];
 
     let inserted = 0;
 
-    for (const c of sfData.records) {
+    /* ---- Insert into PostgreSQL ---- */
+    for (const c of records) {
       const result = await pool.query(
         `
         INSERT INTO sfdc_contacts
@@ -189,23 +202,37 @@ app.post("/api/sync-salesforce", async (req, res) => {
       if (result.rowCount > 0) inserted++;
     }
 
+    /* ---- Response with Progress ---- */
     res.json({
+      success: true,
       message: "Salesforce sync completed",
-      totalFetched: sfData.records.length,
-      inserted
+      steps: {
+        salesforceConnection: "SUCCESS",
+        contactsFetched: records.length,
+        rowsInserted: inserted
+      }
     });
+
   } catch (err) {
     console.error("Salesforce sync error:", err);
-    res.status(500).json({ error: "Salesforce sync failed" });
+    res.status(500).json({
+      success: false,
+      message: "Salesforce sync failed",
+      error: err.message
+    });
   }
 });
 
-/* ---------------- HEALTH ---------------- */
+/* =====================================================
+   HEALTH
+===================================================== */
 app.get("/health", (req, res) => {
   res.json({ status: "UP" });
 });
 
-/* ---------------- START SERVER ---------------- */
+/* =====================================================
+   START SERVER
+===================================================== */
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
