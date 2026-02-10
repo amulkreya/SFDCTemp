@@ -1,7 +1,6 @@
 import express from "express";
 import pkg from "pg";
 import { v4 as uuidv4 } from "uuid";
-import fetch from "node-fetch";
 
 const { Pool } = pkg;
 const app = express();
@@ -105,7 +104,8 @@ app.get("/api/users", async (req, res) => {
 
   const adminCheck = await pool.query(
     `
-    SELECT 1 FROM sfdc_contacts
+    SELECT 1
+    FROM sfdc_contacts
     WHERE session_id = $1 AND role = 'Admin'
     `,
     [sessionId]
@@ -117,8 +117,13 @@ app.get("/api/users", async (req, res) => {
 
   const users = await pool.query(
     `
-    SELECT salesforce_id, emailid, username,
-           firstname, lastname, role, active
+    SELECT salesforce_id,
+           emailid,
+           username,
+           firstname,
+           lastname,
+           role,
+           active
     FROM sfdc_contacts
     ORDER BY created_at DESC
     `
@@ -134,10 +139,10 @@ app.post("/api/sync-salesforce", async (req, res) => {
   try {
     const { sessionId } = req.body;
 
-    // Admin validation
     const adminCheck = await pool.query(
       `
-      SELECT 1 FROM sfdc_contacts
+      SELECT 1
+      FROM sfdc_contacts
       WHERE session_id = $1 AND role = 'Admin'
       `,
       [sessionId]
@@ -147,11 +152,9 @@ app.post("/api/sync-salesforce", async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Salesforce session
     const { sfAccessToken, sfInstanceUrl } =
       await getSalesforceSession();
 
-    // Query Salesforce
     const soql = `
       SELECT Id, FirstName, LastName, Email, Sync__c
       FROM Contact
@@ -175,8 +178,9 @@ app.post("/api/sync-salesforce", async (req, res) => {
       const result = await pool.query(
         `
         INSERT INTO sfdc_contacts
-        (salesforce_id, firstname, lastname, emailid, role, active)
-        VALUES ($1,$2,$3,$4,'Sales',true)
+          (salesforce_id, firstname, lastname, emailid, role, active)
+        VALUES
+          ($1, $2, $3, $4, 'Sales', true)
         ON CONFLICT (salesforce_id) DO NOTHING
         `,
         [c.Id, c.FirstName, c.LastName, c.Email]
