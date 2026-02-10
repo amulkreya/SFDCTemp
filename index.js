@@ -17,6 +17,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
+
 /* ---------------- LOGIN API ---------------- */
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
