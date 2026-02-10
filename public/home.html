@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Home</title>
+</head>
+<body>
+  <h2>All Users</h2>
+
+  <table border="1" cellpadding="5">
+    <thead>
+      <tr>
+        <th>Salesforce ID</th>
+        <th>Email</th>
+        <th>Username</th>
+        <th>First Name</th>
+        <th>Last Name</th>
+        <th>Role</th>
+        <th>Active</th>
+      </tr>
+    </thead>
+    <tbody id="userTable"></tbody>
+  </table>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("sessionId");
+
+    fetch(`/api/users?sessionId=${sessionId}`)
+      .then(res => res.json())
+      .then(data => {
+        const table = document.getElementById("userTable");
+        data.forEach(user => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${user.salesforce_id}</td>
+            <td>${user.emailid}</td>
+            <td>${user.username}</td>
+            <td>${user.firstname}</td>
+            <td>${user.lastname}</td>
+            <td>${user.role}</td>
+            <td>${user.active}</td>
+          `;
+          table.appendChild(row);
+        });
+      });
+  </script>
+</body>
+</html>
