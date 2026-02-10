@@ -3,121 +3,106 @@
 <head>
   <title>Admin Home</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-    }
-    button {
-      padding: 8px 14px;
-      margin-bottom: 15px;
-      cursor: pointer;
-    }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-    }
-    th, td {
-      padding: 8px;
-      border: 1px solid #ccc;
-      text-align: left;
-    }
-    th {
-      background-color: #f4f4f4;
-    }
-    #status {
-      margin: 10px 0;
-      font-weight: bold;
-    }
+    body { font-family: Arial, sans-serif; }
+    button { padding: 8px 14px; margin-right: 10px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    th { background: #f4f4f4; }
+    #status { margin-top: 15px; font-weight: bold; }
   </style>
 </head>
 
 <body>
-  <h2>Salesforce Contacts (Admin)</h2>
 
-  <!-- Sync Button -->
-  <button onclick="syncSalesforce()">🔄 Sync Salesforce Contacts</button>
+<h2>Salesforce → PostgreSQL Sync (Admin)</h2>
 
-  <!-- Status Message -->
-  <div id="status"></div>
+<button onclick="syncSalesforce()">🔄 Sync Salesforce</button>
+<button onclick="loadUsers()">🔁 Refresh Table</button>
 
-  <!-- Data Table -->
-  <table>
-    <thead>
-      <tr>
-        <th>Salesforce ID</th>
-        <th>Email</th>
-        <th>Username</th>
-        <th>First Name</th>
-        <th>Last Name</th>
-        <th>Role</th>
-        <th>Active</th>
-      </tr>
-    </thead>
-    <tbody id="userTable"></tbody>
-  </table>
+<div id="status"></div>
 
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    const sessionId = params.get("sessionId");
+<table>
+  <thead>
+    <tr>
+      <th>Salesforce ID</th>
+      <th>Email</th>
+      <th>Username</th>
+      <th>First Name</th>
+      <th>Last Name</th>
+      <th>Role</th>
+      <th>Active</th>
+    </tr>
+  </thead>
+  <tbody id="userTable"></tbody>
+</table>
 
-    if (!sessionId) {
-      alert("Session expired. Please login again.");
-      window.location.href = "/login.html";
-    }
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get("sessionId");
 
-    // Load users from DB
-    function loadUsers() {
-      fetch(`/api/users?sessionId=${sessionId}`)
-        .then(res => {
-          if (!res.ok) throw new Error("Unauthorized");
-          return res.json();
-        })
-        .then(data => {
-          const table = document.getElementById("userTable");
-          table.innerHTML = "";
+  if (!sessionId) {
+    alert("Session expired. Please login again.");
+    window.location.href = "/login.html";
+  }
 
-          data.forEach(user => {
-            const row = document.createElement("tr");
-            row.innerHTML = `
-              <td>${user.salesforce_id || ""}</td>
-              <td>${user.emailid || ""}</td>
-              <td>${user.username || ""}</td>
-              <td>${user.firstname || ""}</td>
-              <td>${user.lastname || ""}</td>
-              <td>${user.role}</td>
-              <td>${user.active}</td>
-            `;
-            table.appendChild(row);
-          });
-        })
-        .catch(err => {
-          alert("Session expired or unauthorized. Please login again.");
-          window.location.href = "/login.html";
+  function setStatus(msg) {
+    document.getElementById("status").innerText = msg;
+  }
+
+  /* ---- Load Table Data ---- */
+  function loadUsers() {
+    setStatus("📄 Loading data from PostgreSQL...");
+    fetch(`/api/users?sessionId=${sessionId}`)
+      .then(res => res.json())
+      .then(data => {
+        const table = document.getElementById("userTable");
+        table.innerHTML = "";
+        data.forEach(u => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${u.salesforce_id || ""}</td>
+            <td>${u.emailid || ""}</td>
+            <td>${u.username || ""}</td>
+            <td>${u.firstname || ""}</td>
+            <td>${u.lastname || ""}</td>
+            <td>${u.role}</td>
+            <td>${u.active}</td>
+          `;
+          table.appendChild(row);
         });
-    }
+        setStatus("✅ Table refreshed from PostgreSQL");
+      });
+  }
 
-    // Sync Salesforce contacts
-    function syncSalesforce() {
-      const status = document.getElementById("status");
-      status.innerText = "🔄 Syncing Salesforce contacts...";
+  /* ---- Sync Salesforce ---- */
+  function syncSalesforce() {
+    setStatus("🔐 Connecting to Salesforce...");
+    fetch("/api/sync-salesforce", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) {
+          setStatus("❌ Sync failed");
+          return;
+        }
 
-      fetch("/api/sync-salesforce", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId })
+        setStatus(
+          `✅ Sync completed | Salesforce OK | Contacts fetched: ${data.steps.contactsFetched} | Inserted into DB: ${data.steps.rowsInserted}`
+        );
+
+        loadUsers();
       })
-        .then(res => res.json())
-        .then(data => {
-          status.innerText =
-            `✅ Sync completed. Fetched: ${data.totalFetched}, Inserted: ${data.inserted}`;
-          loadUsers();
-        })
-        .catch(err => {
-          status.innerText = "❌ Sync failed. Check logs.";
-        });
-    }
+      .catch(() => {
+        setStatus("❌ Sync error. Check logs.");
+      });
+  }
 
-    // Initial load
-    loadUsers();
-  </script>
+  /* Initial load */
+  loadUsers();
+</script>
+
 </body>
 </html>
