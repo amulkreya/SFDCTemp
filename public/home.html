@@ -1,20 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin Home</title>
+  <title>Salesforce Sync Admin</title>
   <style>
-    body { font-family: Arial, sans-serif; }
-    button { padding: 8px 14px; margin-right: 10px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    body { font-family: Arial; }
+    button { padding: 8px 12px; margin-right: 10px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 15px; }
     th, td { border: 1px solid #ccc; padding: 8px; }
     th { background: #f4f4f4; }
     #status { margin-top: 15px; font-weight: bold; }
   </style>
 </head>
-
 <body>
 
-<h2>Salesforce → PostgreSQL Sync (Admin)</h2>
+<h2>Salesforce Contact Sync</h2>
 
 <button onclick="syncSalesforce()">🔄 Sync Salesforce</button>
 <button onclick="loadUsers()">🔁 Refresh Table</button>
@@ -37,71 +36,65 @@
 </table>
 
 <script>
-  const params = new URLSearchParams(window.location.search);
-  const sessionId = params.get("sessionId");
+const params = new URLSearchParams(window.location.search);
+const sessionId = params.get("sessionId");
 
-  if (!sessionId) {
-    alert("Session expired. Please login again.");
-    window.location.href = "/login.html";
-  }
+if (!sessionId) {
+  alert("Session expired");
+  window.location.href = "/login.html";
+}
 
-  function setStatus(msg) {
-    document.getElementById("status").innerText = msg;
-  }
+function setStatus(msg) {
+  document.getElementById("status").innerText = msg;
+}
 
-  /* ---- Load Table Data ---- */
-  function loadUsers() {
-    setStatus("📄 Loading data from PostgreSQL...");
-    fetch(`/api/users?sessionId=${sessionId}`)
-      .then(res => res.json())
-      .then(data => {
-        const table = document.getElementById("userTable");
-        table.innerHTML = "";
-        data.forEach(u => {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td>${u.salesforce_id || ""}</td>
-            <td>${u.emailid || ""}</td>
-            <td>${u.username || ""}</td>
-            <td>${u.firstname || ""}</td>
-            <td>${u.lastname || ""}</td>
-            <td>${u.role}</td>
-            <td>${u.active}</td>
-          `;
-          table.appendChild(row);
-        });
-        setStatus("✅ Table refreshed from PostgreSQL");
+function loadUsers() {
+  setStatus("Loading table...");
+  fetch(`/api/users?sessionId=${sessionId}`)
+    .then(res => res.json())
+    .then(data => {
+      const table = document.getElementById("userTable");
+      table.innerHTML = "";
+      data.forEach(u => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${u.salesforce_id || ""}</td>
+          <td>${u.emailid || ""}</td>
+          <td>${u.username || ""}</td>
+          <td>${u.firstname || ""}</td>
+          <td>${u.lastname || ""}</td>
+          <td>${u.role}</td>
+          <td>${u.active}</td>
+        `;
+        table.appendChild(row);
       });
-  }
+      setStatus("Table refreshed.");
+    });
+}
 
-  /* ---- Sync Salesforce ---- */
-  function syncSalesforce() {
-    setStatus("🔐 Connecting to Salesforce...");
-    fetch("/api/sync-salesforce", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId })
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (!data.success) {
-          setStatus("❌ Sync failed");
-          return;
-        }
+function syncSalesforce() {
+  setStatus("Connecting to Salesforce...");
+  fetch("/api/sync-salesforce", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (!data.success) {
+      setStatus("Sync failed: " + data.error);
+      return;
+    }
 
-        setStatus(
-          `✅ Sync completed | Salesforce OK | Contacts fetched: ${data.steps.contactsFetched} | Inserted into DB: ${data.steps.rowsInserted}`
-        );
+    setStatus(
+      `Sync complete | Fetched: ${data.steps.contactsFetched} | Inserted: ${data.steps.rowsInserted}`
+    );
 
-        loadUsers();
-      })
-      .catch(() => {
-        setStatus("❌ Sync error. Check logs.");
-      });
-  }
+    loadUsers();
+  });
+}
 
-  /* Initial load */
-  loadUsers();
+loadUsers();
 </script>
 
 </body>
