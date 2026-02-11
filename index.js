@@ -29,8 +29,9 @@ app.get("/", (req, res) => {
 });
 
 /* =====================================================
-   SALESFORCE SESSION (CLIENT CREDENTIALS FLOW)
+   SALESFORCE CLIENT CREDENTIALS AUTH
 ===================================================== */
+
 let sfAccessToken = null;
 let sfInstanceUrl = null;
 let sfTokenExpiry = null;
@@ -49,7 +50,7 @@ async function getSalesforceSession() {
   });
 
   const response = await fetch(
-    "https://login.salesforce.com/services/oauth2/token",
+    process.env.SF_AUTH_URL,
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -60,21 +61,21 @@ async function getSalesforceSession() {
   const data = await response.json();
 
   if (!data.access_token) {
-    console.error("SF Auth Error:", data);
-    throw new Error("Salesforce Client Credentials authentication failed");
+    console.error("Salesforce Auth Error:", data);
+    throw new Error("Salesforce authentication failed");
   }
 
   sfAccessToken = data.access_token;
   sfInstanceUrl = data.instance_url;
 
-  // Token usually valid ~15 mins — refresh a bit earlier
+  // Token valid ~15 mins — refresh before expiry
   sfTokenExpiry = Date.now() + (12 * 60 * 1000);
 
   return { sfAccessToken, sfInstanceUrl };
 }
 
 /* =====================================================
-   LOGIN (ADMIN ONLY)
+   LOGIN (ADMIN)
 ===================================================== */
 app.post("/login", async (req, res) => {
   try {
@@ -112,6 +113,7 @@ app.post("/login", async (req, res) => {
    FETCH USERS
 ===================================================== */
 app.get("/api/users", async (req, res) => {
+
   const { sessionId } = req.query;
 
   const adminCheck = await pool.query(
@@ -129,14 +131,13 @@ app.get("/api/users", async (req, res) => {
 
   const users = await pool.query(
     `
-    SELECT
-      salesforce_id,
-      emailid,
-      username,
-      firstname,
-      lastname,
-      role,
-      active
+    SELECT salesforce_id,
+           emailid,
+           username,
+           firstname,
+           lastname,
+           role,
+           active
     FROM sfdc_contacts
     ORDER BY created_at DESC
     `
@@ -149,7 +150,9 @@ app.get("/api/users", async (req, res) => {
    SALESFORCE SYNC
 ===================================================== */
 app.post("/api/sync-salesforce", async (req, res) => {
+
   try {
+
     const { sessionId } = req.body;
 
     const adminCheck = await pool.query(
@@ -189,6 +192,7 @@ app.post("/api/sync-salesforce", async (req, res) => {
     let inserted = 0;
 
     for (const c of records) {
+
       const result = await pool.query(
         `
         INSERT INTO sfdc_contacts
@@ -214,6 +218,7 @@ app.post("/api/sync-salesforce", async (req, res) => {
 
   } catch (err) {
     console.error("Salesforce sync error:", err);
+
     res.status(500).json({
       success: false,
       error: err.message
