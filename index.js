@@ -29,26 +29,27 @@ app.get("/", (req, res) => {
 });
 
 /* =====================================================
-   SALESFORCE SESSION (CACHED)
+   SALESFORCE SESSION (CLIENT CREDENTIALS FLOW)
 ===================================================== */
 let sfAccessToken = null;
 let sfInstanceUrl = null;
+let sfTokenExpiry = null;
 
 async function getSalesforceSession() {
-  if (sfAccessToken && sfInstanceUrl) {
+
+  // Reuse token if still valid
+  if (sfAccessToken && sfTokenExpiry && Date.now() < sfTokenExpiry) {
     return { sfAccessToken, sfInstanceUrl };
   }
 
   const params = new URLSearchParams({
-    grant_type: "password",
+    grant_type: "client_credentials",
     client_id: process.env.SF_CLIENT_ID,
-    client_secret: process.env.SF_CLIENT_SECRET,
-    username: process.env.SF_USERNAME,
-    password: process.env.SF_PASSWORD
+    client_secret: process.env.SF_CLIENT_SECRET
   });
 
   const response = await fetch(
-    `${process.env.SF_LOGIN_URL}/services/oauth2/token`,
+    "https://login.salesforce.com/services/oauth2/token",
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -58,12 +59,16 @@ async function getSalesforceSession() {
 
   const data = await response.json();
 
-  if (!data.access_token || !data.instance_url) {
-    throw new Error("Salesforce authentication failed");
+  if (!data.access_token) {
+    console.error("SF Auth Error:", data);
+    throw new Error("Salesforce Client Credentials authentication failed");
   }
 
   sfAccessToken = data.access_token;
   sfInstanceUrl = data.instance_url;
+
+  // Token usually valid ~15 mins — refresh a bit earlier
+  sfTokenExpiry = Date.now() + (12 * 60 * 1000);
 
   return { sfAccessToken, sfInstanceUrl };
 }
@@ -104,7 +109,7 @@ app.post("/login", async (req, res) => {
 });
 
 /* =====================================================
-   FETCH USERS (ADMIN AUTH)
+   FETCH USERS
 ===================================================== */
 app.get("/api/users", async (req, res) => {
   const { sessionId } = req.query;
@@ -141,13 +146,12 @@ app.get("/api/users", async (req, res) => {
 });
 
 /* =====================================================
-   SALESFORCE → POSTGRES SYNC (BUTTON)
+   SALESFORCE SYNC
 ===================================================== */
 app.post("/api/sync-salesforce", async (req, res) => {
   try {
     const { sessionId } = req.body;
 
-    /* ---- Admin Validation ---- */
     const adminCheck = await pool.query(
       `
       SELECT 1
@@ -161,11 +165,9 @@ app.post("/api/sync-salesforce", async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    /* ---- Salesforce Login ---- */
     const { sfAccessToken, sfInstanceUrl } =
       await getSalesforceSession();
 
-    /* ---- Fetch Contacts ---- */
     const soql = `
       SELECT Id, FirstName, LastName, Email, Sync__c
       FROM Contact
@@ -186,7 +188,6 @@ app.post("/api/sync-salesforce", async (req, res) => {
 
     let inserted = 0;
 
-    /* ---- Insert into PostgreSQL ---- */
     for (const c of records) {
       const result = await pool.query(
         `
@@ -202,10 +203,8 @@ app.post("/api/sync-salesforce", async (req, res) => {
       if (result.rowCount > 0) inserted++;
     }
 
-    /* ---- Response with Progress ---- */
     res.json({
       success: true,
-      message: "Salesforce sync completed",
       steps: {
         salesforceConnection: "SUCCESS",
         contactsFetched: records.length,
@@ -217,7 +216,6 @@ app.post("/api/sync-salesforce", async (req, res) => {
     console.error("Salesforce sync error:", err);
     res.status(500).json({
       success: false,
-      message: "Salesforce sync failed",
       error: err.message
     });
   }
