@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 /* =====================================================
-   DATABASE CONNECTION
+   DATABASE
 ===================================================== */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -98,7 +98,6 @@ async function getSalesforceSession() {
   const data = await response.json();
 
   if (!data.access_token) {
-    console.error("Salesforce Auth Error:", data);
     throw new Error("Salesforce authentication failed");
   }
 
@@ -116,70 +115,7 @@ async function getSalesforceSession() {
 }
 
 /* =====================================================
-   LOGIN (ADMIN + SALES)
-===================================================== */
-app.post("/login", async (req, res) => {
-
-  const { username, password } = req.body;
-
-  // ADMIN
-  if (username === "admin" && password === "admin") {
-
-    const sessionId = uuidv4();
-
-    await pool.query(`
-      UPDATE sfdc_contacts
-      SET session_id = $1,
-          session_expiry = NOW() + INTERVAL '15 minutes'
-      WHERE role = 'Admin'
-    `, [sessionId]);
-
-    return res.json({ role: "Admin", sessionId });
-  }
-
-  // SALES
-  const user = await pool.query(`
-    SELECT *
-    FROM sfdc_contacts
-    WHERE emailid = $1
-      AND contact_password = $2
-      AND role = 'Sales'
-      AND status = 'Active'
-  `, [username, password]);
-
-  if (user.rowCount === 0) {
-    return res.status(401).json({ error: "Invalid credentials" });
-  }
-
-  const sessionId = uuidv4();
-
-  await pool.query(`
-    UPDATE sfdc_contacts
-    SET session_id = $1,
-        session_expiry = NOW() + INTERVAL '15 minutes'
-    WHERE salesforce_id = $2
-  `, [sessionId, user.rows[0].salesforce_id]);
-
-  res.json({ role: "Sales", sessionId });
-});
-
-/* =====================================================
-   LOGOUT
-===================================================== */
-app.post("/api/logout", validateSession, async (req, res) => {
-
-  await pool.query(`
-    UPDATE sfdc_contacts
-    SET session_id = NULL,
-        session_expiry = NULL
-    WHERE session_id = $1
-  `, [req.headers["sessionid"]]);
-
-  res.json({ success: true });
-});
-
-/* =====================================================
-   SYNC SALESFORCE (ADMIN ONLY)
+   SYNC SALESFORCE
 ===================================================== */
 app.post("/api/sync", validateSession, async (req, res) => {
 
@@ -208,7 +144,17 @@ app.post("/api/sync", validateSession, async (req, res) => {
     );
 
     const sfData = await sfResponse.json();
-    const records = sfData.records || [];
+
+    if (!sfData.records) {
+      return res.status(500).json({
+        success: false,
+        message: "Salesforce query failed",
+        error: sfData
+      });
+    }
+
+    const records = sfData.records;
+    let inserted = 0;
 
     for (const c of records) {
 
@@ -232,76 +178,27 @@ app.post("/api/sync", validateSession, async (req, res) => {
         c.Email,
         c.Phone
       ]);
+
+      inserted++;
     }
 
-    res.json({ success: true, totalSynced: records.length });
+    res.json({
+      success: true,
+      message: "Sync completed successfully",
+      totalFetched: records.length,
+      totalSaved: inserted
+    });
 
   } catch (err) {
     console.error("Sync Error:", err);
-    res.status(500).json({ error: "Sync failed" });
+    res.status(500).json({
+      success: false,
+      message: "Sync failed",
+      error: err.message
+    });
   }
 });
 
-/* =====================================================
-   ADMIN VIEW USERS
-===================================================== */
-app.get("/api/users", validateSession, async (req, res) => {
-
-  if (req.user.role !== "Admin") {
-    return res.status(403).json({ error: "Not allowed" });
-  }
-
-  const users = await pool.query(`
-    SELECT salesforce_id, firstname, lastname,
-           emailid, phone, status
-    FROM sfdc_contacts
-    WHERE role = 'Sales'
-  `);
-
-  res.json(users.rows);
-});
-
-/* =====================================================
-   ACTIVATE / DEACTIVATE
-===================================================== */
-app.post("/api/status", validateSession, async (req, res) => {
-
-  if (req.user.role !== "Admin") {
-    return res.status(403).json({ error: "Only Admin allowed" });
-  }
-
-  const { id, status } = req.body;
-
-  await pool.query(`
-    UPDATE sfdc_contacts
-    SET status = $1
-    WHERE salesforce_id = $2
-  `, [status, id]);
-
-  res.json({ success: true });
-});
-
-/* =====================================================
-   SALES PROFILE
-===================================================== */
-app.get("/api/profile", validateSession, async (req, res) => {
-
-  if (req.user.role !== "Sales") {
-    return res.status(403).json({ error: "Not allowed" });
-  }
-
-  res.json({
-    firstname: req.user.firstname,
-    lastname: req.user.lastname,
-    email: req.user.emailid,
-    phone: req.user.phone,
-    status: req.user.status
-  });
-});
-
-/* =====================================================
-   START SERVER
-===================================================== */
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
