@@ -2,35 +2,74 @@
 <html>
 <head>
 <title>Admin Panel</title>
+
 <style>
-body { font-family: Arial; background:#f4f6f9; padding:30px;}
-h2 { color:#333;}
+body {
+  font-family: Arial;
+  background: #f4f6f9;
+  padding: 30px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+h2 {
+  color: #333;
+}
+
 button {
-  padding:6px 12px;
-  border:none;
-  border-radius:4px;
-  cursor:pointer;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 2px;
 }
-.primary { background:#007bff; color:white;}
-.success { background:#28a745; color:white;}
-.danger { background:#dc3545; color:white;}
+
+.primary { background:#007bff; color:white; }
+.success { background:#28a745; color:white; }
+.danger { background:#dc3545; color:white; }
+
+.logout {
+  background:#444;
+  color:white;
+}
+
 table {
-  width:100%;
+  width: 100%;
   border-collapse: collapse;
-  background:white;
+  background: white;
+  margin-top: 20px;
 }
-th,td { padding:10px; border-bottom:1px solid #ddd;}
-th { background:#343a40; color:white;}
-tr:hover { background:#f1f1f1;}
+
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+th {
+  background: #343a40;
+  color: white;
+}
+
+tr:hover {
+  background: #f1f1f1;
+}
 </style>
 </head>
+
 <body>
 
-<h2>Sales User Management</h2>
+<div class="header">
+  <h2>Admin – Sales User Management</h2>
+  <button class="logout" onclick="logout()">Logout</button>
+</div>
+
+<br>
 
 <button class="primary" onclick="sync()">Sync Salesforce</button>
-
-<br><br>
 
 <table>
 <thead>
@@ -47,54 +86,157 @@ tr:hover { background:#f1f1f1;}
 </table>
 
 <script>
-function load(){
-fetch('/api/users')
-.then(r=>r.json())
-.then(data=>{
-let html='';
-data.forEach(u=>{
-html+=`
-<tr>
-<td>${u.firstname} ${u.lastname}</td>
-<td>${u.emailid}</td>
-<td>${u.phone||''}</td>
-<td>${u.status}</td>
-<td>
-<button onclick="resetPassword('${u.salesforce_id}')">Reset</button>
-</td>
-<td>
-<button class="success" onclick="changeStatus('${u.salesforce_id}','Active')">Activate</button>
-<button class="danger" onclick="changeStatus('${u.salesforce_id}','Inactive')">Deactivate</button>
-</td>
-</tr>`;
-});
-document.getElementById('body').innerHTML=html;
-});
+
+/* =====================================================
+   SESSION CHECK
+===================================================== */
+
+const sessionId = localStorage.getItem("sessionId");
+
+if (!sessionId) {
+  window.location = "login.html";
 }
 
-function sync(){
-fetch('/api/sync',{method:'POST'})
-.then(()=>load());
+/* =====================================================
+   AUTO LOGOUT AFTER 15 MINUTES
+===================================================== */
+
+setTimeout(() => {
+  alert("Session expired. Please login again.");
+  logout();
+}, 15 * 60 * 1000);
+
+/* =====================================================
+   LOAD USERS
+===================================================== */
+
+function load() {
+
+  fetch('/api/users', {
+    headers: { sessionid: sessionId }
+  })
+  .then(res => {
+    if (res.status === 401) {
+      logout();
+    }
+    return res.json();
+  })
+  .then(data => {
+
+    let html = '';
+
+    data.forEach(u => {
+
+      html += `
+      <tr>
+        <td>${u.firstname} ${u.lastname}</td>
+        <td>${u.emailid}</td>
+        <td>${u.phone || ''}</td>
+        <td>${u.status}</td>
+        <td>
+          <button onclick="resetPassword('${u.salesforce_id}')">
+            Reset
+          </button>
+        </td>
+        <td>
+          <button class="success"
+            onclick="changeStatus('${u.salesforce_id}','Active')">
+            Activate
+          </button>
+
+          <button class="danger"
+            onclick="changeStatus('${u.salesforce_id}','Inactive')">
+            Deactivate
+          </button>
+        </td>
+      </tr>`;
+    });
+
+    document.getElementById('body').innerHTML = html;
+
+  })
+  .catch(() => logout());
 }
 
-function changeStatus(id,status){
-fetch('/api/status',{
-method:'POST',
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify({id,status})
-}).then(()=>load());
+/* =====================================================
+   SYNC
+===================================================== */
+
+function sync() {
+  fetch('/api/sync', {
+    method: 'POST',
+    headers: { sessionid: sessionId }
+  })
+  .then(res => {
+    if (res.status === 401) logout();
+    return res.json();
+  })
+  .then(() => load());
 }
 
-function resetPassword(id){
-let pwd=prompt("Enter New Password:");
-fetch('/api/password',{
-method:'POST',
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify({id,password:pwd})
-}).then(()=>alert("Password Updated"));
+/* =====================================================
+   CHANGE STATUS
+===================================================== */
+
+function changeStatus(id, status) {
+  fetch('/api/status', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      sessionid: sessionId
+    },
+    body: JSON.stringify({ id, status })
+  }).then(() => load());
 }
+
+/* =====================================================
+   RESET PASSWORD
+===================================================== */
+
+function resetPassword(id) {
+
+  let pwd = prompt("Enter New Password:");
+
+  if (!pwd) return;
+
+  fetch('/api/password', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      sessionid: sessionId
+    },
+    body: JSON.stringify({ id, password: pwd })
+  })
+  .then(() => alert("Password Updated"));
+}
+
+/* =====================================================
+   LOGOUT
+===================================================== */
+
+function logout() {
+
+  fetch('/api/logout', {
+    method: 'POST',
+    headers: { sessionid: sessionId }
+  })
+  .then(() => {
+    localStorage.clear();
+    window.location = "login.html";
+  });
+}
+
+/* =====================================================
+   PREVENT BACK BUTTON ACCESS
+===================================================== */
+
+window.history.pushState(null, null, window.location.href);
+window.onpopstate = function () {
+  window.history.go(1);
+};
 
 load();
+
 </script>
 
 </body>
