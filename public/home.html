@@ -37,6 +37,11 @@ button {
   color:white;
 }
 
+#syncStatus {
+  margin-top:10px;
+  font-weight:bold;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -69,7 +74,8 @@ tr:hover {
 
 <br>
 
-<button class="primary" onclick="sync()">Sync Salesforce</button>
+<button id="syncBtn" class="primary" onclick="sync()">Sync Salesforce</button>
+<div id="syncStatus"></div>
 
 <table>
 <thead>
@@ -116,9 +122,7 @@ function load() {
     headers: { sessionid: sessionId }
   })
   .then(res => {
-    if (res.status === 401) {
-      logout();
-    }
+    if (res.status === 401) logout();
     return res.json();
   })
   .then(data => {
@@ -159,13 +163,63 @@ function load() {
 }
 
 /* =====================================================
-   SYNC
+   SYNC WITH PROGRESS
 ===================================================== */
 
 function sync() {
+
+  const btn = document.getElementById("syncBtn");
+  const status = document.getElementById("syncStatus");
+
+  btn.disabled = true;
+  status.style.color = "#333";
+  status.innerHTML = "🔄 Connecting to Salesforce...";
+
   fetch('/api/sync', {
     method: 'POST',
     headers: { sessionid: sessionId }
+  })
+  .then(res => {
+    if (res.status === 401) logout();
+    return res.json();
+  })
+  .then(data => {
+
+    if (!data.success) {
+      status.style.color = "red";
+      status.innerHTML = "❌ Sync Failed: " + (data.message || "Unknown error");
+      btn.disabled = false;
+      return;
+    }
+
+    status.style.color = "green";
+    status.innerHTML =
+      `✅ Sync Completed | Fetched: ${data.totalFetched} | Saved: ${data.totalSaved}`;
+
+    btn.disabled = false;
+    load(); // Refresh table
+
+  })
+  .catch(err => {
+    status.style.color = "red";
+    status.innerHTML = "❌ Sync Error occurred";
+    btn.disabled = false;
+  });
+}
+
+/* =====================================================
+   CHANGE STATUS
+===================================================== */
+
+function changeStatus(id, statusValue) {
+
+  fetch('/api/status', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      sessionid: sessionId
+    },
+    body: JSON.stringify({ id, status: statusValue })
   })
   .then(res => {
     if (res.status === 401) logout();
@@ -175,28 +229,12 @@ function sync() {
 }
 
 /* =====================================================
-   CHANGE STATUS
-===================================================== */
-
-function changeStatus(id, status) {
-  fetch('/api/status', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      sessionid: sessionId
-    },
-    body: JSON.stringify({ id, status })
-  }).then(() => load());
-}
-
-/* =====================================================
    RESET PASSWORD
 ===================================================== */
 
 function resetPassword(id) {
 
   let pwd = prompt("Enter New Password:");
-
   if (!pwd) return;
 
   fetch('/api/password', {
@@ -206,6 +244,10 @@ function resetPassword(id) {
       sessionid: sessionId
     },
     body: JSON.stringify({ id, password: pwd })
+  })
+  .then(res => {
+    if (res.status === 401) logout();
+    return res.json();
   })
   .then(() => alert("Password Updated"));
 }
