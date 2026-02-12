@@ -1,95 +1,114 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Salesforce Sync Admin</title>
+  <title>Salesforce Admin</title>
   <style>
-    body { font-family: Arial; }
-    button { padding: 8px 12px; margin-right: 10px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 15px; }
-    th, td { border: 1px solid #ccc; padding: 8px; }
-    th { background: #f4f4f4; }
-    #status { margin-top: 15px; font-weight: bold; }
+    table { border-collapse: collapse; width:100%; }
+    th, td { border:1px solid #ccc; padding:8px; }
+    th { background:#f4f4f4; }
+    #popup {
+      display:none;
+      position:fixed;
+      top:20%;
+      left:35%;
+      background:white;
+      padding:20px;
+      border:1px solid #ccc;
+    }
   </style>
 </head>
 <body>
-  
-<h2>Salesforce Contact Sync</h2>
 
-<button onclick="syncSalesforce()">🔄 Sync Salesforce</button>
-<button onclick="loadUsers()">🔁 Refresh Table</button>
+<h2>Salesforce Contacts</h2>
 
-<div id="status"></div>
+<button onclick="syncSalesforce()">Sync Salesforce</button>
 
 <table>
   <thead>
     <tr>
-      <th>Salesforce ID</th>
+      <th>ID</th>
+      <th>First</th>
+      <th>Last</th>
       <th>Email</th>
-      <th>Username</th>
-      <th>First Name</th>
-      <th>Last Name</th>
-      <th>Role</th>
-      <th>Active</th>
+      <th>Phone</th>
+      <th>Edit</th>
     </tr>
   </thead>
-  <tbody id="userTable"></tbody>
+  <tbody id="tableBody"></tbody>
 </table>
 
+<div id="popup">
+  <input type="hidden" id="editId">
+  First Name: <input id="editFirst"><br><br>
+  Last Name: <input id="editLast"><br><br>
+  Email: <input id="editEmail"><br><br>
+  Phone: <input id="editPhone"><br><br>
+  <button onclick="saveContact()">Save</button>
+  <button onclick="closePopup()">Cancel</button>
+</div>
+
 <script>
-const params = new URLSearchParams(window.location.search);
-const sessionId = params.get("sessionId");
-
-if (!sessionId) {
-  alert("Session expired");
-  window.location.href = "/login.html";
-}
-
-function setStatus(msg) {
-  document.getElementById("status").innerText = msg;
-}
-
 function loadUsers() {
-  setStatus("Loading table...");
-  fetch(`/api/users?sessionId=${sessionId}`)
+  fetch('/api/users')
     .then(res => res.json())
     .then(data => {
-      const table = document.getElementById("userTable");
-      table.innerHTML = "";
+      const body = document.getElementById('tableBody');
+      body.innerHTML='';
       data.forEach(u => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${u.salesforce_id || ""}</td>
-          <td>${u.emailid || ""}</td>
-          <td>${u.username || ""}</td>
-          <td>${u.firstname || ""}</td>
-          <td>${u.lastname || ""}</td>
-          <td>${u.role}</td>
-          <td>${u.active}</td>
+        body.innerHTML += `
+          <tr>
+            <td>${u.salesforce_id}</td>
+            <td>${u.firstname}</td>
+            <td>${u.lastname}</td>
+            <td>${u.emailid}</td>
+            <td>${u.phone || ''}</td>
+            <td>
+              <button onclick="editContact(
+                '${u.salesforce_id}',
+                '${u.firstname}',
+                '${u.lastname}',
+                '${u.emailid}',
+                '${u.phone || ''}'
+              )">Edit Contact</button>
+            </td>
+          </tr>
         `;
-        table.appendChild(row);
       });
-      setStatus("Table refreshed.");
     });
 }
 
 function syncSalesforce() {
-  setStatus("Connecting to Salesforce...");
-  fetch("/api/sync-salesforce", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionId })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (!data.success) {
-      setStatus("Sync failed: " + data.error);
-      return;
-    }
+  fetch('/api/sync-salesforce', { method:'POST' })
+    .then(res => res.json())
+    .then(() => loadUsers());
+}
 
-    setStatus(
-      `Sync complete | Fetched: ${data.steps.contactsFetched} | Inserted: ${data.steps.rowsInserted}`
-    );
+function editContact(id,f,l,e,p) {
+  document.getElementById('popup').style.display='block';
+  document.getElementById('editId').value=id;
+  document.getElementById('editFirst').value=f;
+  document.getElementById('editLast').value=l;
+  document.getElementById('editEmail').value=e;
+  document.getElementById('editPhone').value=p;
+}
 
+function closePopup() {
+  document.getElementById('popup').style.display='none';
+}
+
+function saveContact() {
+  fetch('/api/update-contact',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      salesforce_id: document.getElementById('editId').value,
+      firstname: document.getElementById('editFirst').value,
+      lastname: document.getElementById('editLast').value,
+      emailid: document.getElementById('editEmail').value,
+      phone: document.getElementById('editPhone').value
+    })
+  }).then(()=>{
+    closePopup();
     loadUsers();
   });
 }
