@@ -1,0 +1,21 @@
+<h2>Sales Dashboard</h2>
+
+<div id="profile"></div>
+
+<script>
+const params=new URLSearchParams(window.location.search);
+const id=params.get("salesforce_id");
+
+fetch(`/api/profile/${id}`)
+.then(res=>res.json())
+.then(data=>{
+document.getElementById('profile').innerHTML=`
+<h3>Profile</h3>
+First Name: ${data.firstname}<br>
+Last Name: ${data.lastname}<br>
+Email: ${data.emailid}<br>
+Phone: ${data.phone}<br>
+Status: ${data.status}
+`;
+});
+</script>
