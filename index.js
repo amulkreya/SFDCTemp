@@ -20,71 +20,53 @@ app.get("/", (req, res) => {
 });
 
 /* =====================================================
-   SALESFORCE TOKEN (24 Hour Stored)
+   SESSION VALIDATION MIDDLEWARE
 ===================================================== */
-async function getSalesforceSession() {
+async function validateSession(req, res, next) {
 
-  const tokenCheck = await pool.query(`
-    SELECT sfdc_token, token_last_fetched
-    FROM sfdc_contacts
-    WHERE role = 'Admin'
-    LIMIT 1
-  `);
+  const sessionId = req.headers["sessionid"];
 
-  if (tokenCheck.rowCount > 0) {
-    const { sfdc_token, token_last_fetched } = tokenCheck.rows[0];
-
-    if (sfdc_token && token_last_fetched) {
-      const age = Date.now() - new Date(token_last_fetched).getTime();
-      if (age < 24 * 60 * 60 * 1000) {
-        return {
-          sfAccessToken: sfdc_token,
-          sfInstanceUrl: "https://capsule2.my.salesforce.com"
-        };
-      }
-    }
+  if (!sessionId) {
+    return res.status(401).json({ error: "No session" });
   }
 
-  const params = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: process.env.SF_CLIENT_ID,
-    client_secret: process.env.SF_CLIENT_SECRET
-  });
+  const user = await pool.query(`
+    SELECT * FROM sfdc_contacts
+    WHERE session_id=$1
+      AND session_expiry > CURRENT_TIMESTAMP
+  `, [sessionId]);
 
-  const response = await fetch(process.env.SF_AUTH_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params
-  });
+  if (user.rowCount === 0) {
+    return res.status(401).json({ error: "Session expired" });
+  }
 
-  const data = await response.json();
-
-  await pool.query(`
-    UPDATE sfdc_contacts
-    SET sfdc_token=$1,
-        token_last_fetched=CURRENT_TIMESTAMP
-    WHERE role='Admin'
-  `,[data.access_token]);
-
-  return {
-    sfAccessToken: data.access_token,
-    sfInstanceUrl: data.instance_url
-  };
+  req.user = user.rows[0];
+  next();
 }
 
 /* =====================================================
-   LOGIN
+   LOGIN (ADMIN + SALES)
 ===================================================== */
 app.post("/login", async (req, res) => {
 
   const { username, password } = req.body;
 
-  // Admin
+  // ADMIN
   if (username === "admin" && password === "admin") {
-    return res.redirect("/home.html");
+
+    const sessionId = uuidv4();
+
+    await pool.query(`
+      UPDATE sfdc_contacts
+      SET session_id=$1,
+          session_expiry=NOW() + INTERVAL '15 minutes'
+      WHERE role='Admin'
+    `,[sessionId]);
+
+    return res.json({ role:"Admin", sessionId });
   }
 
-  // Sales
+  // SALES
   const user = await pool.query(`
     SELECT * FROM sfdc_contacts
     WHERE emailid=$1
@@ -93,20 +75,47 @@ app.post("/login", async (req, res) => {
       AND status='Active'
   `,[username,password]);
 
-  if(user.rowCount === 0){
-    return res.status(401).send("Invalid credentials or inactive account");
+  if(user.rowCount===0){
+    return res.status(401).json({error:"Invalid login"});
   }
 
-  res.redirect(`/dashboard.html?id=${user.rows[0].salesforce_id}`);
+  const sessionId = uuidv4();
+
+  await pool.query(`
+    UPDATE sfdc_contacts
+    SET session_id=$1,
+        session_expiry=NOW() + INTERVAL '15 minutes'
+    WHERE salesforce_id=$2
+  `,[sessionId,user.rows[0].salesforce_id]);
+
+  res.json({
+    role:"Sales",
+    sessionId,
+    id:user.rows[0].salesforce_id
+  });
 });
 
 /* =====================================================
-   SYNC CONTACTS (Default Inactive)
+   LOGOUT
 ===================================================== */
-app.post("/api/sync", async (req,res)=>{
+app.post("/api/logout", async (req,res)=>{
 
-  const { sfAccessToken, sfInstanceUrl } =
-    await getSalesforceSession();
+  const sessionId = req.headers["sessionid"];
+
+  await pool.query(`
+    UPDATE sfdc_contacts
+    SET session_id=NULL,
+        session_expiry=NULL
+    WHERE session_id=$1
+  `,[sessionId]);
+
+  res.json({success:true});
+});
+
+/* =====================================================
+   SYNC (USERNAME = EMAIL)
+===================================================== */
+app.post("/api/sync", validateSession, async (req,res)=>{
 
   const soql = `
     SELECT Id, FirstName, LastName, Email, Phone
@@ -114,93 +123,62 @@ app.post("/api/sync", async (req,res)=>{
     WHERE Sync__c = true
   `;
 
+  // For brevity assume token function exists
+  const { sfAccessToken, sfInstanceUrl } =
+    await getSalesforceSession();
+
   const sfResponse = await fetch(
     `${sfInstanceUrl}/services/data/v59.0/query?q=${encodeURIComponent(soql)}`,
-    { headers:{ Authorization:`Bearer ${sfAccessToken}` } }
+    { headers:{Authorization:`Bearer ${sfAccessToken}`} }
   );
 
   const sfData = await sfResponse.json();
-  const records = sfData.records || [];
 
-  for(const c of records){
+  for(const c of sfData.records){
     await pool.query(`
       INSERT INTO sfdc_contacts
       (salesforce_id, firstname, lastname,
-       emailid, phone, role, status)
-      VALUES ($1,$2,$3,$4,$5,'Sales','Inactive')
+       emailid, username, phone, role, status)
+      VALUES ($1,$2,$3,$4,$4,$5,'Sales','Inactive')
       ON CONFLICT (salesforce_id)
       DO UPDATE SET
         firstname=$2,
         lastname=$3,
         emailid=$4,
+        username=$4,
         phone=$5
     `,[c.Id,c.FirstName,c.LastName,c.Email,c.Phone]);
   }
 
-  res.json({success:true,count:records.length});
+  res.json({success:true});
 });
 
 /* =====================================================
-   GET SALES USERS (NO ADMIN)
+   USERS (ADMIN)
 ===================================================== */
-app.get("/api/users", async (req,res)=>{
+app.get("/api/users", validateSession, async (req,res)=>{
 
   const users = await pool.query(`
     SELECT salesforce_id, firstname, lastname,
            emailid, phone, status
     FROM sfdc_contacts
     WHERE role='Sales'
-    ORDER BY created_at DESC
   `);
 
   res.json(users.rows);
 });
 
 /* =====================================================
-   ACTIVATE / DEACTIVATE
+   PROFILE (SALES)
 ===================================================== */
-app.post("/api/status", async (req,res)=>{
-
-  const { id,status } = req.body;
-
-  await pool.query(`
-    UPDATE sfdc_contacts
-    SET status=$1
-    WHERE salesforce_id=$2
-  `,[status,id]);
-
-  res.json({success:true});
-});
-
-/* =====================================================
-   RESET PASSWORD
-===================================================== */
-app.post("/api/password", async (req,res)=>{
-
-  const { id,password } = req.body;
-
-  await pool.query(`
-    UPDATE sfdc_contacts
-    SET contact_password=$1
-    WHERE salesforce_id=$2
-  `,[password,id]);
-
-  res.json({success:true});
-});
-
-/* =====================================================
-   PROFILE
-===================================================== */
-app.get("/api/profile/:id", async (req,res)=>{
-
-  const user = await pool.query(`
-    SELECT firstname, lastname,
-           emailid, phone, status
-    FROM sfdc_contacts
-    WHERE salesforce_id=$1
-  `,[req.params.id]);
-
-  res.json(user.rows[0]);
+app.get("/api/profile", validateSession, async (req,res)=>{
+  res.json({
+    firstname:req.user.firstname,
+    lastname:req.user.lastname,
+    email:req.user.emailid,
+    phone:req.user.phone,
+    status:req.user.status
+  });
 });
 
 app.listen(PORT, ()=>{
