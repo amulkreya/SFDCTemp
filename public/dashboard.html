@@ -1,42 +1,37 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>Sales Dashboard</title>
-<style>
-body { font-family: Arial; background:#f4f6f9; padding:40px;}
-.card {
-  background:white;
-  padding:20px;
-  border-radius:8px;
-  width:400px;
-  box-shadow:0 4px 10px rgba(0,0,0,0.1);
-}
-h2 { color:#007bff;}
-</style>
-</head>
 <body>
-
 <h2>Sales Dashboard</h2>
-
-<div class="card" id="profile"></div>
+<button onclick="logout()">Logout</button>
+<div id="profile"></div>
 
 <script>
-const params=new URLSearchParams(window.location.search);
-const id=params.get("id");
+const sessionId=localStorage.getItem("sessionId");
 
-fetch(`/api/profile/${id}`)
-.then(r=>r.json())
+fetch('/api/profile',{
+headers:{sessionid:sessionId}
+}).then(r=>r.json())
 .then(data=>{
-document.getElementById('profile').innerHTML=`
-<h3>Profile</h3>
-<p><b>First Name:</b> ${data.firstname}</p>
-<p><b>Last Name:</b> ${data.lastname}</p>
-<p><b>Email:</b> ${data.emailid}</p>
+document.getElementById("profile").innerHTML=`
+<p><b>Name:</b> ${data.firstname} ${data.lastname}</p>
+<p><b>Email:</b> ${data.email}</p>
 <p><b>Phone:</b> ${data.phone}</p>
-<p><b>Status:</b> ${data.status}</p>
-`;
+<p><b>Status:</b> ${data.status}</p>`;
 });
-</script>
 
+// Auto logout after 15 min
+setTimeout(()=>logout(),15*60*1000);
+
+function logout(){
+fetch('/api/logout',{
+method:'POST',
+headers:{sessionid:sessionId}
+}).then(()=>{
+localStorage.clear();
+window.location="login.html";
+});
+}
+
+// Prevent back button
+window.history.pushState(null,null,window.location.href);
+window.onpopstate=function(){window.history.go(1);}
+</script>
 </body>
-</html>
