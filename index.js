@@ -1,13 +1,14 @@
 import express from "express";
 import pkg from "pg";
 import { v4 as uuidv4 } from "uuid";
-import fetch from "node-fetch";
 
 const { Pool } = pkg;
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-
+/* =====================================================
+   DATABASE CONNECTION
+===================================================== */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -22,7 +23,7 @@ app.get("/", (req, res) => {
 });
 
 /* =====================================================
-   WEBSITE SESSION VALIDATION (15 MIN)
+   SESSION VALIDATION (15 MIN)
 ===================================================== */
 async function validateSession(req, res, next) {
 
@@ -48,7 +49,7 @@ async function validateSession(req, res, next) {
 }
 
 /* =====================================================
-   SALESFORCE TOKEN (24 HOURS)
+   SALESFORCE TOKEN (24 HOURS CACHE)
 ===================================================== */
 async function getSalesforceSession() {
 
@@ -115,13 +116,13 @@ async function getSalesforceSession() {
 }
 
 /* =====================================================
-   LOGIN
+   LOGIN (ADMIN + SALES)
 ===================================================== */
 app.post("/login", async (req, res) => {
 
   const { username, password } = req.body;
 
-  // ADMIN LOGIN
+  // ADMIN
   if (username === "admin" && password === "admin") {
 
     const sessionId = uuidv4();
@@ -136,7 +137,7 @@ app.post("/login", async (req, res) => {
     return res.json({ role: "Admin", sessionId });
   }
 
-  // SALES LOGIN
+  // SALES
   const user = await pool.query(`
     SELECT *
     FROM sfdc_contacts
@@ -242,7 +243,7 @@ app.post("/api/sync", validateSession, async (req, res) => {
 });
 
 /* =====================================================
-   USERS (ADMIN VIEW)
+   ADMIN VIEW USERS
 ===================================================== */
 app.get("/api/users", validateSession, async (req, res) => {
 
@@ -281,7 +282,7 @@ app.post("/api/status", validateSession, async (req, res) => {
 });
 
 /* =====================================================
-   PROFILE (SALES)
+   SALES PROFILE
 ===================================================== */
 app.get("/api/profile", validateSession, async (req, res) => {
 
@@ -298,6 +299,9 @@ app.get("/api/profile", validateSession, async (req, res) => {
   });
 });
 
+/* =====================================================
+   START SERVER
+===================================================== */
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
