@@ -1,6 +1,7 @@
 import express from "express";
 import pkg from "pg";
 import { v4 as uuidv4 } from "uuid";
+import fetch from "node-fetch";
 
 const { Pool } = pkg;
 const app = express();
@@ -46,7 +47,7 @@ async function validateSession(req, res, next) {
 }
 
 /* =====================================================
-   SALESFORCE TOKEN (24 HOURS STORED IN ADMIN)
+   SALESFORCE TOKEN (24 HOURS)
 ===================================================== */
 async function getSalesforceSession() {
 
@@ -69,16 +70,14 @@ async function getSalesforceSession() {
       const twentyFourHours = 24 * 60 * 60 * 1000;
 
       if (tokenAge < twentyFourHours) {
-
         return {
           sfAccessToken: sfdc_token,
-          sfInstanceUrl: "https://capsule2.my.salesforce.com"
+          sfInstanceUrl: process.env.SF_INSTANCE_URL
         };
       }
     }
   }
 
-  // Fetch new token
   const params = new URLSearchParams({
     grant_type: "client_credentials",
     client_id: process.env.SF_CLIENT_ID,
@@ -97,11 +96,10 @@ async function getSalesforceSession() {
   const data = await response.json();
 
   if (!data.access_token) {
-    console.error("SF Auth Error:", data);
+    console.error("Salesforce Auth Error:", data);
     throw new Error("Salesforce authentication failed");
   }
 
-  // Store token in Admin record
   await pool.query(`
     UPDATE sfdc_contacts
     SET sfdc_token = $1,
@@ -116,7 +114,7 @@ async function getSalesforceSession() {
 }
 
 /* =====================================================
-   LOGIN (ADMIN + SALES)
+   LOGIN
 ===================================================== */
 app.post("/login", async (req, res) => {
 
@@ -160,10 +158,7 @@ app.post("/login", async (req, res) => {
     WHERE salesforce_id = $2
   `, [sessionId, user.rows[0].salesforce_id]);
 
-  res.json({
-    role: "Sales",
-    sessionId
-  });
+  res.json({ role: "Sales", sessionId });
 });
 
 /* =====================================================
@@ -237,10 +232,7 @@ app.post("/api/sync", validateSession, async (req, res) => {
       ]);
     }
 
-    res.json({
-      success: true,
-      totalSynced: records.length
-    });
+    res.json({ success: true, totalSynced: records.length });
 
   } catch (err) {
     console.error("Sync Error:", err);
@@ -265,6 +257,26 @@ app.get("/api/users", validateSession, async (req, res) => {
   `);
 
   res.json(users.rows);
+});
+
+/* =====================================================
+   ACTIVATE / DEACTIVATE
+===================================================== */
+app.post("/api/status", validateSession, async (req, res) => {
+
+  if (req.user.role !== "Admin") {
+    return res.status(403).json({ error: "Only Admin allowed" });
+  }
+
+  const { id, status } = req.body;
+
+  await pool.query(`
+    UPDATE sfdc_contacts
+    SET status = $1
+    WHERE salesforce_id = $2
+  `, [status, id]);
+
+  res.json({ success: true });
 });
 
 /* =====================================================
