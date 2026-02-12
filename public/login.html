@@ -3,44 +3,90 @@
 <head>
 <title>Login</title>
 <style>
-body{background:#f4f6f9;font-family:Arial;
-display:flex;justify-content:center;align-items:center;height:100vh;}
-.card{background:white;padding:30px;border-radius:8px;
-box-shadow:0 5px 20px rgba(0,0,0,0.1);width:300px;}
-input{width:100%;padding:8px;margin:10px 0;}
-button{width:100%;padding:10px;background:#007bff;color:white;border:none;}
+body {
+  background:#f4f6f9;
+  font-family:Arial;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+
+.card {
+  background:white;
+  padding:30px;
+  width:300px;
+  border-radius:8px;
+  box-shadow:0 5px 20px rgba(0,0,0,0.1);
+}
+
+input {
+  width:100%;
+  padding:10px;
+  margin:10px 0;
+}
+
+button {
+  width:100%;
+  padding:10px;
+  background:#007bff;
+  color:white;
+  border:none;
+  border-radius:4px;
+  cursor:pointer;
+}
+
+#error {
+  color:red;
+  margin-top:10px;
+}
 </style>
 </head>
 <body>
 
 <div class="card">
-<h2>Login</h2>
-<input id="user" placeholder="Email / Admin">
-<input id="pass" type="password" placeholder="Password">
-<button onclick="login()">Login</button>
+  <h2>Login</h2>
+  <input id="username" placeholder="Username / Email">
+  <input id="password" type="password" placeholder="Password">
+  <button onclick="login()">Login</button>
+  <div id="error"></div>
 </div>
 
 <script>
-function login(){
-fetch('/login',{
-method:'POST',
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify({
-username:document.getElementById('user').value,
-password:document.getElementById('pass').value
-})
-}).then(r=>r.json())
-.then(data=>{
-if(data.role==="Admin"){
-localStorage.setItem("sessionId",data.sessionId);
-window.location="home.html";
+
+function login() {
+
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+
+  fetch("/login", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({ username, password })
+  })
+  .then(res => res.json())
+  .then(data => {
+
+    if (!data.success) {
+      document.getElementById("error").innerText =
+        data.message || "Login Failed";
+      return;
+    }
+
+    localStorage.setItem("sessionId", data.sessionId);
+
+    if (data.role === "Admin") {
+      window.location = "home.html";
+    } else {
+      window.location = "dashboard.html";
+    }
+
+  })
+  .catch(() => {
+    document.getElementById("error").innerText = "Server error";
+  });
 }
-if(data.role==="Sales"){
-localStorage.setItem("sessionId",data.sessionId);
-window.location="dashboard.html";
-}
-}).catch(()=>alert("Login failed"));
-}
+
 </script>
 
 </body>
