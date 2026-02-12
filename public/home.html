@@ -1,120 +1,65 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Salesforce Admin</title>
-  <style>
-    table { border-collapse: collapse; width:100%; }
-    th, td { border:1px solid #ccc; padding:8px; }
-    th { background:#f4f4f4; }
-    #popup {
-      display:none;
-      position:fixed;
-      top:20%;
-      left:35%;
-      background:white;
-      padding:20px;
-      border:1px solid #ccc;
-    }
-  </style>
-</head>
-<body>
+<h2>Admin Panel</h2>
 
-<h2>Salesforce Contacts</h2>
-
-<button onclick="syncSalesforce()">Sync Salesforce</button>
+<button onclick="loadUsers()">Refresh</button>
 
 <table>
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>First</th>
-      <th>Last</th>
-      <th>Email</th>
-      <th>Phone</th>
-      <th>Edit</th>
-    </tr>
-  </thead>
-  <tbody id="tableBody"></tbody>
+<thead>
+<tr>
+<th>ID</th>
+<th>Name</th>
+<th>Email</th>
+<th>Phone</th>
+<th>Status</th>
+<th>Password</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody id="body"></tbody>
 </table>
 
-<div id="popup">
-  <input type="hidden" id="editId">
-  First Name: <input id="editFirst"><br><br>
-  Last Name: <input id="editLast"><br><br>
-  Email: <input id="editEmail"><br><br>
-  Phone: <input id="editPhone"><br><br>
-  <button onclick="saveContact()">Save</button>
-  <button onclick="closePopup()">Cancel</button>
-</div>
-
 <script>
-function loadUsers() {
-  fetch('/api/users')
-    .then(res => res.json())
-    .then(data => {
-      const body = document.getElementById('tableBody');
-      body.innerHTML='';
-      data.forEach(u => {
-        body.innerHTML += `
-          <tr>
-            <td>${u.salesforce_id}</td>
-            <td>${u.firstname}</td>
-            <td>${u.lastname}</td>
-            <td>${u.emailid}</td>
-            <td>${u.phone || ''}</td>
-            <td>
-              <button onclick="editContact(
-                '${u.salesforce_id}',
-                '${u.firstname}',
-                '${u.lastname}',
-                '${u.emailid}',
-                '${u.phone || ''}'
-              )">Edit Contact</button>
-            </td>
-          </tr>
-        `;
-      });
-    });
+function loadUsers(){
+fetch('/api/users')
+.then(res=>res.json())
+.then(data=>{
+let html='';
+data.forEach(u=>{
+html+=`
+<tr>
+<td>${u.salesforce_id}</td>
+<td>${u.firstname} ${u.lastname}</td>
+<td>${u.emailid}</td>
+<td>${u.phone||''}</td>
+<td>${u.status}</td>
+<td>
+<button onclick="setPassword('${u.salesforce_id}')">Set/Reset</button>
+</td>
+<td>
+<button onclick="toggleStatus('${u.salesforce_id}','Active')">Activate</button>
+<button onclick="toggleStatus('${u.salesforce_id}','Inactive')">Deactivate</button>
+</td>
+</tr>`;
+});
+document.getElementById('body').innerHTML=html;
+});
 }
 
-function syncSalesforce() {
-  fetch('/api/sync-salesforce', { method:'POST' })
-    .then(res => res.json())
-    .then(() => loadUsers());
+function setPassword(id){
+let pwd=prompt("Enter New Password:");
+fetch('/api/set-password',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({salesforce_id:id,new_password:pwd})
+}).then(()=>alert("Password Updated"));
 }
 
-function editContact(id,f,l,e,p) {
-  document.getElementById('popup').style.display='block';
-  document.getElementById('editId').value=id;
-  document.getElementById('editFirst').value=f;
-  document.getElementById('editLast').value=l;
-  document.getElementById('editEmail').value=e;
-  document.getElementById('editPhone').value=p;
-}
-
-function closePopup() {
-  document.getElementById('popup').style.display='none';
-}
-
-function saveContact() {
-  fetch('/api/update-contact',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      salesforce_id: document.getElementById('editId').value,
-      firstname: document.getElementById('editFirst').value,
-      lastname: document.getElementById('editLast').value,
-      emailid: document.getElementById('editEmail').value,
-      phone: document.getElementById('editPhone').value
-    })
-  }).then(()=>{
-    closePopup();
-    loadUsers();
-  });
+function toggleStatus(id,status){
+fetch('/api/toggle-status',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({salesforce_id:id,status})
+}).then(()=>loadUsers());
 }
 
 loadUsers();
 </script>
-
-</body>
-</html>
