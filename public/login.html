@@ -1,46 +1,118 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Login</title>
-<style>
-body{background:#f4f6f9;font-family:Arial;
-display:flex;justify-content:center;align-items:center;height:100vh;}
-.card{background:white;padding:30px;border-radius:8px;
-box-shadow:0 5px 20px rgba(0,0,0,0.1);width:300px;}
-input{width:100%;padding:8px;margin:10px 0;}
-button{width:100%;padding:10px;background:#007bff;color:white;border:none;}
-</style>
+  <title>Login Portal</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: linear-gradient(135deg,#667eea,#764ba2);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 0;
+    }
+
+    .card {
+      background: white;
+      padding: 40px;
+      border-radius: 10px;
+      width: 350px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      text-align: center;
+    }
+
+    h2 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    .error {
+      color: red;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
 
 <div class="card">
-<h2>Login</h2>
-<input id="user" placeholder="Email / Admin">
-<input id="pass" type="password" placeholder="Password">
-<button onclick="login()">Login</button>
+  <h2>Login Portal</h2>
+
+  <input type="text" id="username" placeholder="Username (Email or admin)">
+  <input type="password" id="password" placeholder="Password">
+
+  <button onclick="login()">Login</button>
+
+  <div class="error" id="error"></div>
 </div>
 
 <script>
-function login(){
-fetch('/login',{
-method:'POST',
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify({
-username:document.getElementById('user').value,
-password:document.getElementById('pass').value
-})
-}).then(r=>r.json())
-.then(data=>{
-if(data.role==="Admin"){
-localStorage.setItem("sessionId",data.sessionId);
-window.location="home.html";
+async function login() {
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+
+  document.getElementById("error").innerText = "Logging in...";
+
+  try {
+    const res = await fetch("/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+
+    if (!data.success) {
+      document.getElementById("error").innerText = "Invalid Credentials";
+      return;
+    }
+
+    // 🔥 IMPORTANT: Store sessionId
+    localStorage.setItem("sessionId", data.sessionId);
+    localStorage.setItem("role", data.role);
+
+    // Redirect based on role
+    if (data.role === "Admin") {
+      window.location.href = "/home.html";
+    } else {
+      window.location.href = "/dashboard.html";
+    }
+
+  } catch (err) {
+    document.getElementById("error").innerText = "Server Error. Try again.";
+  }
 }
-if(data.role==="Sales"){
-localStorage.setItem("sessionId",data.sessionId);
-window.location="dashboard.html";
-}
-}).catch(()=>alert("Login failed"));
-}
+
+/* Prevent back navigation after logout */
+window.history.pushState(null, null, window.location.href);
+window.onpopstate = function () {
+  window.history.go(1);
+};
 </script>
 
 </body>
