@@ -6,8 +6,6 @@ const { Pool } = pkg;
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-/* ================= DATABASE ================= */
-
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -21,9 +19,11 @@ app.get("/", (req, res) => {
   res.redirect("/login.html");
 });
 
-/* ================= SESSION VALIDATION ================= */
-
+/* =====================================================
+   SESSION VALIDATION MIDDLEWARE
+===================================================== */
 async function validateSession(req, res, next) {
+
   const sessionId = req.headers["sessionid"];
 
   if (!sessionId) {
@@ -31,9 +31,8 @@ async function validateSession(req, res, next) {
   }
 
   const user = await pool.query(`
-    SELECT *
-    FROM sfdc_contacts
-    WHERE session_id = $1
+    SELECT * FROM sfdc_contacts
+    WHERE session_id=$1
       AND session_expiry > CURRENT_TIMESTAMP
   `, [sessionId]);
 
@@ -45,13 +44,14 @@ async function validateSession(req, res, next) {
   next();
 }
 
-/* ================= LOGIN ================= */
-
+/* =====================================================
+   LOGIN (ADMIN + SALES)
+===================================================== */
 app.post("/login", async (req, res) => {
 
   const { username, password } = req.body;
 
-  // ADMIN LOGIN
+  // ADMIN
   if (username === "admin" && password === "admin") {
 
     const sessionId = uuidv4();
@@ -61,30 +61,22 @@ app.post("/login", async (req, res) => {
       SET session_id=$1,
           session_expiry=NOW() + INTERVAL '15 minutes'
       WHERE role='Admin'
-    `, [sessionId]);
+    `,[sessionId]);
 
-    return res.json({
-      success: true,
-      role: "Admin",
-      sessionId
-    });
+    return res.json({ role:"Admin", sessionId });
   }
 
-  // SALES LOGIN
+  // SALES
   const user = await pool.query(`
-    SELECT *
-    FROM sfdc_contacts
+    SELECT * FROM sfdc_contacts
     WHERE emailid=$1
       AND contact_password=$2
       AND role='Sales'
       AND status='Active'
-  `, [username, password]);
+  `,[username,password]);
 
-  if (user.rowCount === 0) {
-    return res.status(401).json({
-      success: false,
-      message: "Invalid credentials"
-    });
+  if(user.rowCount===0){
+    return res.status(401).json({error:"Invalid login"});
   }
 
   const sessionId = uuidv4();
@@ -94,36 +86,77 @@ app.post("/login", async (req, res) => {
     SET session_id=$1,
         session_expiry=NOW() + INTERVAL '15 minutes'
     WHERE salesforce_id=$2
-  `, [sessionId, user.rows[0].salesforce_id]);
+  `,[sessionId,user.rows[0].salesforce_id]);
 
   res.json({
-    success: true,
-    role: "Sales",
-    sessionId
+    role:"Sales",
+    sessionId,
+    id:user.rows[0].salesforce_id
   });
 });
 
-/* ================= LOGOUT ================= */
+/* =====================================================
+   LOGOUT
+===================================================== */
+app.post("/api/logout", async (req,res)=>{
 
-app.post("/api/logout", validateSession, async (req, res) => {
+  const sessionId = req.headers["sessionid"];
 
   await pool.query(`
     UPDATE sfdc_contacts
     SET session_id=NULL,
         session_expiry=NULL
     WHERE session_id=$1
-  `, [req.headers["sessionid"]]);
+  `,[sessionId]);
 
-  res.json({ success: true });
+  res.json({success:true});
 });
 
-/* ================= USERS (ADMIN VIEW) ================= */
+/* =====================================================
+   SYNC (USERNAME = EMAIL)
+===================================================== */
+app.post("/api/sync", validateSession, async (req,res)=>{
 
-app.get("/api/users", validateSession, async (req, res) => {
+  const soql = `
+    SELECT Id, FirstName, LastName, Email, Phone
+    FROM Contact
+    WHERE Sync__c = true
+  `;
 
-  if (req.user.role !== "Admin") {
-    return res.status(403).json({ error: "Not allowed" });
+  // For brevity assume token function exists
+  const { sfAccessToken, sfInstanceUrl } =
+    await getSalesforceSession();
+
+  const sfResponse = await fetch(
+    `${sfInstanceUrl}/services/data/v59.0/query?q=${encodeURIComponent(soql)}`,
+    { headers:{Authorization:`Bearer ${sfAccessToken}`} }
+  );
+
+  const sfData = await sfResponse.json();
+
+  for(const c of sfData.records){
+    await pool.query(`
+      INSERT INTO sfdc_contacts
+      (salesforce_id, firstname, lastname,
+       emailid, username, phone, role, status)
+      VALUES ($1,$2,$3,$4,$4,$5,'Sales','Inactive')
+      ON CONFLICT (salesforce_id)
+      DO UPDATE SET
+        firstname=$2,
+        lastname=$3,
+        emailid=$4,
+        username=$4,
+        phone=$5
+    `,[c.Id,c.FirstName,c.LastName,c.Email,c.Phone]);
   }
+
+  res.json({success:true});
+});
+
+/* =====================================================
+   USERS (ADMIN)
+===================================================== */
+app.get("/api/users", validateSession, async (req,res)=>{
 
   const users = await pool.query(`
     SELECT salesforce_id, firstname, lastname,
@@ -135,57 +168,19 @@ app.get("/api/users", validateSession, async (req, res) => {
   res.json(users.rows);
 });
 
-/* ================= UPDATE STATUS ================= */
-
-app.post("/api/status", validateSession, async (req, res) => {
-
-  if (req.user.role !== "Admin") {
-    return res.status(403).json({ error: "Only Admin allowed" });
-  }
-
-  const { id, status } = req.body;
-
-  await pool.query(`
-    UPDATE sfdc_contacts
-    SET status=$1
-    WHERE salesforce_id=$2
-  `, [status, id]);
-
-  res.json({ success: true });
-});
-
-/* ================= RESET PASSWORD ================= */
-
-app.post("/api/password", validateSession, async (req, res) => {
-
-  if (req.user.role !== "Admin") {
-    return res.status(403).json({ error: "Only Admin allowed" });
-  }
-
-  const { id, password } = req.body;
-
-  await pool.query(`
-    UPDATE sfdc_contacts
-    SET contact_password=$1
-    WHERE salesforce_id=$2
-  `, [password, id]);
-
-  res.json({ success: true });
-});
-
-/* ================= PROFILE ================= */
-
-app.get("/api/profile", validateSession, async (req, res) => {
-
+/* =====================================================
+   PROFILE (SALES)
+===================================================== */
+app.get("/api/profile", validateSession, async (req,res)=>{
   res.json({
-    firstname: req.user.firstname,
-    lastname: req.user.lastname,
-    email: req.user.emailid,
-    phone: req.user.phone,
-    status: req.user.status
+    firstname:req.user.firstname,
+    lastname:req.user.lastname,
+    email:req.user.emailid,
+    phone:req.user.phone,
+    status:req.user.status
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, ()=>{
   console.log(`Server running on port ${PORT}`);
 });
