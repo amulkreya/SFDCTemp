@@ -13,6 +13,7 @@ body {
   user-select: none;
 }
 
+/* HEADER */
 .header {
   background: linear-gradient(135deg, #0b3d91, #1f6feb);
   color: white;
@@ -37,6 +38,10 @@ body {
   font-weight: 600;
 }
 
+.logout-btn:hover {
+  background: #d9363e;
+}
+
 .container {
   padding: 30px;
   max-width: 1200px;
@@ -58,9 +63,15 @@ body {
   font-size: 28px;
 }
 
+.subtitle {
+  color: #555;
+  margin-top: 10px;
+  font-size: 16px;
+}
+
 .video-section {
   background: white;
-  padding: 18px;
+  padding: 20px;
   border-radius: 12px;
   margin-bottom: 25px;
   box-shadow: 0 4px 14px rgba(0,0,0,0.08);
@@ -82,7 +93,7 @@ body {
   background: black;
 }
 
-/* TOP overlay blocks title + open in drive */
+/* Overlay to block Drive title + download UI clicks */
 .top-overlay {
   position: absolute;
   top: 0;
@@ -90,18 +101,15 @@ body {
   width: 100%;
   height: 70px;
   z-index: 10;
-  background: transparent;
 }
 
-/* BOTTOM overlay blocks control bar interactions */
 .bottom-overlay {
   position: absolute;
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 60px;
+  height: 65px;
   z-index: 10;
-  background: transparent;
 }
 
 iframe {
@@ -110,117 +118,111 @@ iframe {
   height: 100%;
   border: none;
 }
+
 .footer {
   text-align: center;
   padding: 20px;
   color: #777;
+  font-size: 14px;
 }
 </style>
 </head>
 
 <body oncontextmenu="return false;">
 
+<!-- HEADER -->
 <div class="header">
-  <div class="title">Revenue Cloud Advance - Secure Learning Portal</div>
+  <div class="title">Revenue Cloud Advance - Secure Sales Dashboard</div>
   <button class="logout-btn" onclick="logout()">Logout</button>
 </div>
 
 <div class="container">
 
+  <!-- WELCOME -->
   <div class="welcome-card">
     <h2>🎓 Welcome to Revenue Cloud Advance Course</h2>
-    <p>Protected Streaming Portal – Download Disabled Mode</p>
+    <p class="subtitle">
+      Authorized Streaming Portal – Downloads Restricted | Kreya IT Consulting
+    </p>
   </div>
 
-  <!-- DAY 1 -->
-  <div class="video-section">
-    <div class="video-title">📘 Day 1</div>
-    <div class="video-wrapper">
-      <div class="top-overlay"></div><div class="bottom-overlay"></div>
-      <iframe sandbox="allow-same-origin allow-scripts allow-presentation"
-      src="https://drive.google.com/file/d/1ZCFzCjlRvRrnvkph6wtvyy-5REZMEM79/preview"></iframe>
-    </div>
-  </div>
-
-  <!-- DAY 2 -->
-  <div class="video-section">
-    <div class="video-title">📘 Day 2</div>
-    <div class="video-wrapper">
-      <div class="top-overlay"></div><div class="bottom-overlay"></div>
-      <iframe sandbox="allow-same-origin allow-scripts allow-presentation"
-      src="https://drive.google.com/file/d/1tOC-EYYvgf_XYPfkVe-Z96qWige3f0hR/preview"></iframe>
-    </div>
-  </div>
-
-  <!-- DAY 3 -->
-  <div class="video-section">
-    <div class="video-title">📘 Day 3</div>
-    <div class="video-wrapper">
-      <div class="top-overlay"></div><div class="bottom-overlay"></div>
-      <iframe sandbox="allow-same-origin allow-scripts allow-presentation"
-      src="https://drive.google.com/file/d/1dlML55PJIad7JhqFE6uGkwNtKeP3lB1C/preview"></iframe>
-    </div>
-  </div>
-
-  <!-- DAY 4 -->
-  <div class="video-section">
-    <div class="video-title">📘 Day 4</div>
-    <div class="video-wrapper">
-      <div class="top-overlay"></div><div class="bottom-overlay"></div>
-      <iframe sandbox="allow-same-origin allow-scripts allow-presentation"
-      src="https://drive.google.com/file/d/13SI0aCuWXVLU2fYMB_tc8mDQ6vF_-dpQ/preview"></iframe>
-    </div>
-  </div>
-
-  <!-- DAY 5.1 -->
-  <div class="video-section">
-    <div class="video-title">📘 Day 5.1</div>
-    <div class="video-wrapper">
-      <div class="top-overlay"></div><div class="bottom-overlay"></div>
-      <iframe sandbox="allow-same-origin allow-scripts allow-presentation"
-      src="https://drive.google.com/file/d/1EJgUi5oei2zDTb5a37iXcYU0JmxsF3XY/preview"></iframe>
-    </div>
-  </div>
-
-  <!-- DAY 5.2 -->
-  <div class="video-section">
-    <div class="video-title">📘 Day 5.2</div>
-    <div class="video-wrapper">
-      <div class="top-overlay"></div><div class="bottom-overlay"></div>
-      <iframe sandbox="allow-same-origin allow-scripts allow-presentation"
-      src="https://drive.google.com/file/d/12iyaOwVZjavLLS3oxWB7IjLcjXnNHRKu/preview"></iframe>
-    </div>
-  </div>
-
-  <!-- DAY 6 -->
-  <div class="video-section">
-    <div class="video-title">📘 Day 6</div>
-    <div class="video-wrapper">
-      <div class="top-overlay"></div><div class="bottom-overlay"></div>
-      <iframe sandbox="allow-same-origin allow-scripts allow-presentation"
-      src="https://drive.google.com/file/d/10UBYl5kqLICWj-cAR7RciRfZhUK8W7Lw/preview"></iframe>
-    </div>
-  </div>
-
-  <!-- DAY 7 to 17 (same secure pattern) -->
-  <!-- You can continue exact structure for all remaining videos -->
+  <!-- VIDEO TEMPLATE START -->
   
+  <script>
+    const videos = [
+      { day: "Day 1", id: "1ZCFzCjlRvRrnvkph6wtvyy-5REZMEM79" },
+      { day: "Day 2", id: "1tOC-EYYvgf_XYPfkVe-Z96qWige3f0hR" },
+      { day: "Day 3", id: "1dlML55PJIad7JhqFE6uGkwNtKeP3lB1C" },
+      { day: "Day 4", id: "13SI0aCuWXVLU2fYMB_tc8mDQ6vF_-dpQ" },
+      { day: "Day 5.1", id: "1EJgUi5oei2zDTb5a37iXcYU0JmxsF3XY" },
+      { day: "Day 5.2", id: "12iyaOwVZjavLLS3oxWB7IjLcjXnNHRKu" },
+      { day: "Day 6", id: "10UBYl5kqLICWj-cAR7RciRfZhUK8W7Lw" },
+      { day: "Day 7", id: "1jM37rq3txFDMkBO4gen82Ic6MQyLbGLb" },
+      { day: "Day 8", id: "1UILQiYrjj_R-s-LXHwBQ696sGgAUTYax" },
+      { day: "Day 9", id: "1ORaOfZWMF7QQfXPzEWtyFcYzpW1aTTFz" },
+      { day: "Day 10", id: "17nZZ2hHbkh1-v_VrTERwvxAh8nTYTiTe" },
+      { day: "Day 11", id: "1tJngUgPr07aPuxUIBDoHq1Qhs0gIe38Q" },
+      { day: "Day 12", id: "1IYq2XUJXY_d8xz2zUTHv8zIkQNINqWW1" },
+      { day: "Day 13.1", id: "1p4P_39r46zCfreO2QrFK9G6pCaKKQ6X2" },
+      { day: "Day 13.2", id: "19fwPVMpR3YO9SGPMgNg1KN6SJQSybEqj" },
+      { day: "Day 13.3", id: "1EKEqqvdKl5JQJsd4N6OwsphdTTQdraVG" },
+      { day: "Day 14", id: "1IxGxnts8OFliXyK8P4mBDx9QCz-xC2jP" },
+      { day: "Day 15", id: "1qrNccLKWzW9v-GJiPAHVUvrd8lywIwd4" },
+      { day: "Day 16", id: "1MmtBoTgmbW_9ZUKIz_YroKZnIDuXdV0Q" },
+      { day: "Day 17", id: "162Mkh2yyTDbM3xQ6kNaQ1XHI2hZr22a9" }
+    ];
+  </script>
+
+  <div id="videoContainer"></div>
+
 </div>
 
 <div class="footer">
-© 2026 Kreya IT Consulting | Secure RCA Training Portal
+  © 2026 Kreya IT Consulting Pvt Ltd | Secure RCA Learning Portal
 </div>
 
 <script>
+/* ================= SESSION CHECK ================= */
 const sessionId = localStorage.getItem("sessionId");
-if (!sessionId) window.location.href = "login.html";
+if (!sessionId) {
+  window.location.href = "login.html";
+}
 
-/* Auto logout after 15 min */
+/* ================= LOAD VIDEOS ================= */
+const container = document.getElementById("videoContainer");
+
+videos.forEach(v => {
+  const html = `
+  <div class="video-section">
+    <div class="video-title">📺 ${v.day} – RCA Training</div>
+    <div class="video-wrapper">
+      <div class="top-overlay"></div>
+      <div class="bottom-overlay"></div>
+      <iframe
+        src="https://drive.google.com/file/d/${v.id}/preview"
+        sandbox="allow-same-origin allow-scripts allow-presentation"
+        allow="autoplay; encrypted-media"
+        referrerpolicy="no-referrer">
+      </iframe>
+    </div>
+  </div>`;
+  container.innerHTML += html;
+});
+
+/* ================= SERVER VALIDATION ================= */
+fetch("/api/users", {
+  headers: { sessionid: sessionId }
+}).then(res => {
+  if (res.status === 401) logout();
+}).catch(() => logout());
+
+/* ================= AUTO LOGOUT ================= */
 setTimeout(() => {
   alert("Session expired. Please login again.");
   logout();
 }, 15 * 60 * 1000);
 
+/* ================= LOGOUT ================= */
 function logout() {
   fetch("/api/logout", {
     method: "POST",
@@ -231,24 +233,27 @@ function logout() {
   });
 }
 
-/* Block dev tools & download shortcuts */
+/* ================= SECURITY HARDENING ================= */
 document.addEventListener("keydown", function(e) {
   if (
     e.key === "F12" ||
-    (e.ctrlKey && e.key === "s") ||
+    (e.ctrlKey && e.shiftKey && e.key === "I") ||
     (e.ctrlKey && e.key === "u") ||
-    (e.ctrlKey && e.shiftKey && e.key === "I")
+    (e.ctrlKey && e.key === "s")
   ) {
     e.preventDefault();
     return false;
   }
 });
 
-/* Disable right click */
 document.addEventListener("contextmenu", e => e.preventDefault());
-
-/* Disable drag */
 document.addEventListener("dragstart", e => e.preventDefault());
+
+/* Prevent Back Button Access */
+window.history.pushState(null, null, window.location.href);
+window.onpopstate = function () {
+  window.history.go(1);
+};
 </script>
 
 </body>
