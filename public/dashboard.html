@@ -1,37 +1,219 @@
-<body>
-<h2>Sales Dashboard</h2>
-<button onclick="logout()">Logout</button>
-<div id="profile"></div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Revenue Cloud Advance - Dashboard</title>
 
-<script>
-const sessionId=localStorage.getItem("sessionId");
-
-fetch('/api/profile',{
-headers:{sessionid:sessionId}
-}).then(r=>r.json())
-.then(data=>{
-document.getElementById("profile").innerHTML=`
-<p><b>Name:</b> ${data.firstname} ${data.lastname}</p>
-<p><b>Email:</b> ${data.email}</p>
-<p><b>Phone:</b> ${data.phone}</p>
-<p><b>Status:</b> ${data.status}</p>`;
-});
-
-// Auto logout after 15 min
-setTimeout(()=>logout(),15*60*1000);
-
-function logout(){
-fetch('/api/logout',{
-method:'POST',
-headers:{sessionid:sessionId}
-}).then(()=>{
-localStorage.clear();
-window.location="login.html";
-});
+<style>
+body {
+  margin: 0;
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: #f4f6fb;
 }
 
-// Prevent back button
-window.history.pushState(null,null,window.location.href);
-window.onpopstate=function(){window.history.go(1);}
+.header {
+  background: linear-gradient(135deg, #0b3d91, #1f6feb);
+  color: white;
+  padding: 20px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.logout-btn {
+  background: #ff4d4f;
+  border: none;
+  padding: 10px 18px;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.logout-btn:hover {
+  background: #d9363e;
+}
+
+.container {
+  padding: 30px;
+  max-width: 1200px;
+  margin: auto;
+}
+
+.welcome-card {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+  margin-bottom: 30px;
+}
+
+.welcome-card h2 {
+  margin: 0;
+  color: #0b3d91;
+}
+
+.subtitle {
+  color: #555;
+  margin-top: 8px;
+}
+
+.video-section {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+
+.video-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: #222;
+}
+
+.video-wrapper {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.video-wrapper iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.footer {
+  text-align: center;
+  padding: 20px;
+  color: #777;
+  font-size: 14px;
+}
+</style>
+</head>
+
+<body oncontextmenu="return false;">
+
+<!-- HEADER -->
+<div class="header">
+  <div class="title">Revenue Cloud Advance - Sales Dashboard</div>
+  <button class="logout-btn" onclick="logout()">Logout</button>
+</div>
+
+<div class="container">
+
+  <!-- WELCOME CARD -->
+  <div class="welcome-card">
+    <h2>🎓 Welcome to Revenue Cloud Advance Course</h2>
+    <p class="subtitle">
+      Access your exclusive training videos below. Only authorized sales users can watch these sessions.
+    </p>
+  </div>
+
+  <!-- VIDEO 1 -->
+  <div class="video-section">
+    <div class="video-title">📺 Video 1: Revenue Cloud Advance Training</div>
+    <div class="video-wrapper">
+      <iframe 
+        src="https://www.youtube.com/embed/EBLvEvYuiSQ?rel=0&controls=1&modestbranding=1&disablekb=1"
+        title="Revenue Cloud Advance Video 1"
+        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen
+        controlsList="nodownload">
+      </iframe>
+    </div>
+  </div>
+
+  <!-- VIDEO 2 -->
+  <div class="video-section">
+    <div class="video-title">📺 Video 2: Advanced Concepts Session</div>
+    <div class="video-wrapper">
+      <iframe 
+        src="https://www.youtube.com/embed/EBLvEvYuiSQ?rel=0&controls=1&modestbranding=1&disablekb=1"
+        title="Revenue Cloud Advance Video 2"
+        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen
+        controlsList="nodownload">
+      </iframe>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  © 2026 Kreya IT Consulting Pvt Ltd | Revenue Cloud Advance Learning Portal
+</div>
+
+<script>
+/* ================= SESSION CHECK ================= */
+const sessionId = localStorage.getItem("sessionId");
+
+if (!sessionId) {
+  window.location.href = "login.html";
+}
+
+/* ================= VALIDATE SESSION WITH SERVER ================= */
+fetch("/api/users", {
+  headers: { sessionid: sessionId }
+})
+.then(res => {
+  if (res.status === 401) {
+    alert("Session expired. Please login again.");
+    logout();
+  }
+})
+.catch(() => logout());
+
+/* ================= AUTO LOGOUT AFTER 15 MIN ================= */
+setTimeout(() => {
+  alert("Session expired due to inactivity.");
+  logout();
+}, 15 * 60 * 1000);
+
+/* ================= LOGOUT FUNCTION ================= */
+function logout() {
+  fetch("/api/logout", {
+    method: "POST",
+    headers: { sessionid: sessionId }
+  })
+  .finally(() => {
+    localStorage.clear();
+    window.location.href = "login.html";
+  });
+}
+
+/* ================= PREVENT BACK BUTTON ================= */
+window.history.pushState(null, null, window.location.href);
+window.onpopstate = function () {
+  window.history.go(1);
+};
+
+/* ================= DISABLE DEVTOOLS SHORTCUTS ================= */
+document.addEventListener("keydown", function(e) {
+  if (
+    e.key === "F12" ||
+    (e.ctrlKey && e.shiftKey && e.key === "I") ||
+    (e.ctrlKey && e.shiftKey && e.key === "J") ||
+    (e.ctrlKey && e.key === "U")
+  ) {
+    e.preventDefault();
+    return false;
+  }
+});
 </script>
+
 </body>
+</html>
