@@ -12,7 +12,6 @@ body {
   background: #f4f6fb;
 }
 
-/* HEADER */
 .header {
   background: linear-gradient(135deg, #0b3d91, #1f6feb);
   color: white;
@@ -92,7 +91,6 @@ body {
   background: black;
 }
 
-/* Overlay to block YouTube clickable header */
 .video-overlay {
   position: absolute;
   top: 0;
@@ -101,7 +99,6 @@ body {
   height: 60px;
   z-index: 5;
   background: transparent;
-  pointer-events: none;
 }
 
 .video-wrapper iframe {
@@ -137,11 +134,11 @@ body {
     <h2>🎓 Welcome to Revenue Cloud Advance Course</h2>
     <p class="subtitle">
       Exclusive training portal for authorized Sales users only.
-      Streaming enabled. Download & external navigation restricted.
+      Videos are available in secure streaming mode.
     </p>
   </div>
 
-  <!-- VIDEO 1 (YouTube Protected Embed) -->
+  <!-- VIDEO 1 (YouTube Secure) -->
   <div class="video-section">
     <div class="video-title">📺 Video 1: Revenue Cloud Advance Training</div>
     <div class="video-wrapper">
@@ -150,12 +147,12 @@ body {
         src="https://www.youtube-nocookie.com/embed/EBLvEvYuiSQ?rel=0&modestbranding=1&controls=1&disablekb=1&fs=0&iv_load_policy=3&playsinline=1"
         allow="autoplay; encrypted-media; picture-in-picture"
         referrerpolicy="strict-origin-when-cross-origin"
-        sandbox="allow-scripts allow-same-origin allow-presentation">
+        allowfullscreen>
       </iframe>
     </div>
   </div>
 
-  <!-- VIDEO 2 (YouTube Protected Embed) -->
+  <!-- VIDEO 2 (YouTube Secure) -->
   <div class="video-section">
     <div class="video-title">📺 Video 2: Advanced Concepts Session</div>
     <div class="video-wrapper">
@@ -163,20 +160,19 @@ body {
       <iframe
         src="https://www.youtube-nocookie.com/embed/EBLvEvYuiSQ?rel=0&modestbranding=1&controls=1&disablekb=1&fs=0&iv_load_policy=3&playsinline=1"
         allow="autoplay; encrypted-media; picture-in-picture"
-        sandbox="allow-scripts allow-same-origin allow-presentation">
+        allowfullscreen>
       </iframe>
     </div>
   </div>
 
-  <!-- VIDEO 3 (OneDrive PLAYABLE EMBED) -->
+  <!-- VIDEO 3 (Google Drive Playable Embed) -->
   <div class="video-section">
-    <div class="video-title">🎥 Video 3: Exclusive OneDrive Training</div>
+    <div class="video-title">🎥 Video 3: Exclusive Course Recording (Google Drive)</div>
     <div class="video-wrapper">
-      <!-- IMPORTANT: Replace YOUR_EMBED_LINK below -->
       <iframe
-        src="https://onedrive.live.com/embed?resid=17F364C1C9541E36%21123&authkey=!YOUR_AUTH_KEY&em=2"
-        allowfullscreen
-        allow="autoplay">
+        src="https://drive.google.com/file/d/1ZCFzCjlRvRrnvkph6wtvyy-5REZMEM79/preview"
+        allow="autoplay"
+        allowfullscreen>
       </iframe>
     </div>
   </div>
@@ -184,18 +180,17 @@ body {
 </div>
 
 <div class="footer">
-  © 2026 Kreya IT Consulting Pvt Ltd | Secure Learning Portal
+  © 2026 Kreya IT Consulting Pvt Ltd | Secure Learning Portal (RCA Batch)
 </div>
 
 <script>
-/* ================= SESSION CHECK ================= */
 const sessionId = localStorage.getItem("sessionId");
 
 if (!sessionId) {
   window.location.href = "login.html";
 }
 
-/* ================= SERVER VALIDATION ================= */
+/* Validate session */
 fetch("/api/users", {
   headers: { sessionid: sessionId }
 })
@@ -207,13 +202,13 @@ fetch("/api/users", {
 })
 .catch(() => logout());
 
-/* ================= AUTO LOGOUT (15 MIN) ================= */
+/* Auto logout after 15 min */
 setTimeout(() => {
   alert("Session expired due to inactivity.");
   logout();
 }, 15 * 60 * 1000);
 
-/* ================= LOGOUT ================= */
+/* Logout */
 function logout() {
   fetch("/api/logout", {
     method: "POST",
@@ -224,5 +219,26 @@ function logout() {
   });
 }
 
-/* ================= PREVENT BACK BUTTON ================= */
-window.history.pus
+/* Prevent back navigation */
+window.history.pushState(null, null, window.location.href);
+window.onpopstate = function () {
+  window.history.go(1);
+};
+
+/* Disable right click */
+document.addEventListener("contextmenu", e => e.preventDefault());
+
+/* Block DevTools shortcuts */
+document.addEventListener("keydown", function(e) {
+  if (
+    e.key === "F12" ||
+    (e.ctrlKey && e.shiftKey && e.key === "I") ||
+    (e.ctrlKey && e.key === "U")
+  ) {
+    e.preventDefault();
+  }
+});
+</script>
+
+</body>
+</html>
