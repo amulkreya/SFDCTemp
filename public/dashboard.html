@@ -12,6 +12,7 @@ body {
   background: #f4f6fb;
 }
 
+/* HEADER */
 .header {
   background: linear-gradient(135deg, #0b3d91, #1f6feb);
   color: white;
@@ -52,16 +53,19 @@ body {
   border-radius: 12px;
   box-shadow: 0 4px 14px rgba(0,0,0,0.08);
   margin-bottom: 30px;
+  text-align: center;
 }
 
 .welcome-card h2 {
   margin: 0;
   color: #0b3d91;
+  font-size: 28px;
 }
 
 .subtitle {
   color: #555;
-  margin-top: 8px;
+  margin-top: 10px;
+  font-size: 16px;
 }
 
 .video-section {
@@ -84,7 +88,19 @@ body {
   padding-bottom: 56.25%;
   height: 0;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 12px;
+  background: black;
+}
+
+/* Overlay to block YouTube clickable title area */
+.video-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 50px;
+  z-index: 5;
+  background: transparent;
 }
 
 .video-wrapper iframe {
@@ -115,11 +131,12 @@ body {
 
 <div class="container">
 
-  <!-- WELCOME CARD -->
+  <!-- WELCOME -->
   <div class="welcome-card">
     <h2>🎓 Welcome to Revenue Cloud Advance Course</h2>
     <p class="subtitle">
-      Access your exclusive training videos below. Only authorized sales users can watch these sessions.
+      Exclusive training portal for authorized Sales users only.
+      Videos are protected and available for online streaming only.
     </p>
   </div>
 
@@ -127,12 +144,13 @@ body {
   <div class="video-section">
     <div class="video-title">📺 Video 1: Revenue Cloud Advance Training</div>
     <div class="video-wrapper">
-      <iframe 
-        src="https://www.youtube.com/embed/EBLvEvYuiSQ?rel=0&controls=1&modestbranding=1&disablekb=1"
+      <div class="video-overlay"></div>
+      <iframe
+        src="https://www.youtube-nocookie.com/embed/EBLvEvYuiSQ?rel=0&modestbranding=1&controls=1&disablekb=1&fs=0&iv_load_policy=3&playsinline=1"
         title="Revenue Cloud Advance Video 1"
-        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-        allowfullscreen
-        controlsList="nodownload">
+        allow="autoplay; encrypted-media; picture-in-picture"
+        referrerpolicy="strict-origin-when-cross-origin"
+        allowfullscreen>
       </iframe>
     </div>
   </div>
@@ -141,12 +159,13 @@ body {
   <div class="video-section">
     <div class="video-title">📺 Video 2: Advanced Concepts Session</div>
     <div class="video-wrapper">
-      <iframe 
-        src="https://www.youtube.com/embed/EBLvEvYuiSQ?rel=0&controls=1&modestbranding=1&disablekb=1"
+      <div class="video-overlay"></div>
+      <iframe
+        src="https://www.youtube-nocookie.com/embed/EBLvEvYuiSQ?rel=0&modestbranding=1&controls=1&disablekb=1&fs=0&iv_load_policy=3&playsinline=1"
         title="Revenue Cloud Advance Video 2"
-        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-        allowfullscreen
-        controlsList="nodownload">
+        allow="autoplay; encrypted-media; picture-in-picture"
+        referrerpolicy="strict-origin-when-cross-origin"
+        allowfullscreen>
       </iframe>
     </div>
   </div>
@@ -154,7 +173,7 @@ body {
 </div>
 
 <div class="footer">
-  © 2026 Kreya IT Consulting Pvt Ltd | Revenue Cloud Advance Learning Portal
+  © 2026 Kreya IT Consulting Pvt Ltd | Secure Learning Portal
 </div>
 
 <script>
@@ -165,7 +184,7 @@ if (!sessionId) {
   window.location.href = "login.html";
 }
 
-/* ================= VALIDATE SESSION WITH SERVER ================= */
+/* ================= SERVER VALIDATION ================= */
 fetch("/api/users", {
   headers: { sessionid: sessionId }
 })
@@ -177,19 +196,18 @@ fetch("/api/users", {
 })
 .catch(() => logout());
 
-/* ================= AUTO LOGOUT AFTER 15 MIN ================= */
+/* ================= AUTO LOGOUT (15 MIN) ================= */
 setTimeout(() => {
   alert("Session expired due to inactivity.");
   logout();
 }, 15 * 60 * 1000);
 
-/* ================= LOGOUT FUNCTION ================= */
+/* ================= LOGOUT ================= */
 function logout() {
   fetch("/api/logout", {
     method: "POST",
     headers: { sessionid: sessionId }
-  })
-  .finally(() => {
+  }).finally(() => {
     localStorage.clear();
     window.location.href = "login.html";
   });
@@ -201,7 +219,7 @@ window.onpopstate = function () {
   window.history.go(1);
 };
 
-/* ================= DISABLE DEVTOOLS SHORTCUTS ================= */
+/* ================= BLOCK DEVTOOLS & SHORTCUTS ================= */
 document.addEventListener("keydown", function(e) {
   if (
     e.key === "F12" ||
@@ -213,6 +231,9 @@ document.addEventListener("keydown", function(e) {
     return false;
   }
 });
+
+/* ================= DISABLE TEXT SELECTION ================= */
+document.addEventListener("selectstart", e => e.preventDefault());
 </script>
 
 </body>
