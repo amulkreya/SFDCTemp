@@ -6,37 +6,29 @@ const { Pool } = pkg;
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-/* =====================================================
-   DATABASE CONNECTION
-===================================================== */
+/* ================= DATABASE ================= */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-/* =====================================================
-   MIDDLEWARE
-===================================================== */
+/* ================= MIDDLEWARE ================= */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
-/* =====================================================
-   ROOT
-===================================================== */
+/* ================= ROOT ================= */
 app.get("/", (req, res) => {
   res.redirect("/login.html");
 });
 
-/* =====================================================
-   SESSION VALIDATION (15 MIN EXPIRY)
-===================================================== */
+/* ================= SESSION VALIDATION (15 MIN) ================= */
 async function validateSession(req, res, next) {
   try {
     const sessionId = req.headers.sessionid;
 
     if (!sessionId) {
-      return res.status(401).json({ error: "No session" });
+      return res.status(401).json({ error: "No sessionId provided" });
     }
 
     const result = await pool.query(
@@ -53,39 +45,19 @@ async function validateSession(req, res, next) {
     req.user = result.rows[0];
     next();
   } catch (err) {
-    console.error("Session Validation Error:", err);
+    console.error("Session validation error:", err);
     res.status(500).json({ error: "Session validation failed" });
   }
 }
 
-/* =====================================================
-   SALESFORCE TOKEN (24H CACHE IN DB)
-===================================================== */
+/* ================= SALESFORCE TOKEN (CLIENT CREDENTIALS) ================= */
 async function getSalesforceToken() {
   try {
-    // Check existing token (stored against Admin)
-    const existing = await pool.query(
-      `SELECT sfdc_token, token_fetched_at 
-       FROM sfdc_contacts 
-       WHERE role='Admin' LIMIT 1`
-    );
-
-    if (existing.rowCount > 0) {
-      const token = existing.rows[0].sfdc_token;
-      const fetchedAt = existing.rows[0].token_fetched_at;
-
-      if (token && fetchedAt) {
-        const diffHours =
-          (new Date() - new Date(fetchedAt)) / (1000 * 60 * 60);
-
-        if (diffHours < 24) {
-          console.log("Using cached Salesforce token");
-          return token;
-        }
-      }
+    if (!process.env.SF_AUTH_URL) {
+      throw new Error("SF_AUTH_URL is not set in Render ENV");
     }
 
-    console.log("Fetching NEW Salesforce token...");
+    console.log("🔄 Fetching NEW Salesforce Access Token...");
 
     const params = new URLSearchParams({
       grant_type: "client_credentials",
@@ -93,38 +65,32 @@ async function getSalesforceToken() {
       client_secret: process.env.SF_CLIENT_SECRET
     });
 
-    const response = await fetch(process.env.SF_TOKEN_URL, {
+    const response = await fetch(process.env.SF_AUTH_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
       body: params
     });
 
     const data = await response.json();
+    console.log("🔐 Salesforce Token Response:", data);
 
     if (!data.access_token) {
-      throw new Error(
-        "Salesforce Token Error: " + JSON.stringify(data)
-      );
+      throw new Error("Access token not received: " + JSON.stringify(data));
     }
 
-    // Store token in DB
-    await pool.query(
-      `UPDATE sfdc_contacts 
-       SET sfdc_token=$1, token_fetched_at=NOW() 
-       WHERE role='Admin'`,
-      [data.access_token]
-    );
-
-    return data.access_token;
+    return {
+      accessToken: data.access_token,
+      instanceUrl: process.env.SF_INSTANCE_URL
+    };
   } catch (err) {
-    console.error("Salesforce Token Error:", err.message);
+    console.error("❌ Salesforce Token Error:", err.message);
     throw err;
   }
 }
 
-/* =====================================================
-   LOGIN (ADMIN + SALES)
-===================================================== */
+/* ================= LOGIN (ADMIN + SALES) ================= */
 app.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -134,8 +100,8 @@ app.post("/login", async (req, res) => {
       const sessionId = uuidv4();
 
       await pool.query(
-        `UPDATE sfdc_contacts 
-         SET session_id=$1, 
+        `UPDATE sfdc_contacts
+         SET session_id=$1,
              session_expiry=NOW() + INTERVAL '15 minutes'
          WHERE role='Admin'`,
         [sessionId]
@@ -158,14 +124,14 @@ app.post("/login", async (req, res) => {
     );
 
     if (user.rowCount === 0) {
-      return res.json({ success: false });
+      return res.json({ success: false, message: "Invalid credentials" });
     }
 
     const sessionId = uuidv4();
 
     await pool.query(
-      `UPDATE sfdc_contacts 
-       SET session_id=$1, 
+      `UPDATE sfdc_contacts
+       SET session_id=$1,
            session_expiry=NOW() + INTERVAL '15 minutes'
        WHERE salesforce_id=$2`,
       [sessionId, user.rows[0].salesforce_id]
@@ -176,63 +142,63 @@ app.post("/login", async (req, res) => {
       role: "Sales",
       sessionId
     });
+
   } catch (err) {
-    console.error("Login Error:", err);
+    console.error("Login error:", err);
     res.status(500).json({ success: false });
   }
 });
 
-/* =====================================================
-   GET USERS (ADMIN PANEL - NO ADMIN ROWS)
-===================================================== */
+/* ================= FETCH USERS (ADMIN PANEL) ================= */
 app.get("/api/users", validateSession, async (req, res) => {
   try {
     const users = await pool.query(
-      `SELECT salesforce_id, firstname, lastname,
+      `SELECT salesforce_id, firstname, lastname, 
               emailid, phone, status
        FROM sfdc_contacts
        WHERE role='Sales'
-       ORDER BY firstname ASC`
+       ORDER BY created_at DESC`
     );
 
     res.json(users.rows);
   } catch (err) {
-    console.error("Fetch Users Error:", err);
+    console.error("Fetch users error:", err);
     res.status(500).json({ error: "Failed to fetch users" });
   }
 });
 
-/* =====================================================
-   SALESFORCE SYNC (WITH PROGRESS SAFE HANDLING)
-===================================================== */
+/* ================= SALESFORCE SYNC (FIXED + PROGRESS SAFE) ================= */
 app.post("/api/sync", validateSession, async (req, res) => {
   try {
-    console.log("Sync Started...");
+    console.log("🚀 Sync Started...");
 
-    const token = await getSalesforceToken();
+    // Step 1: Get Token
+    const { accessToken, instanceUrl } = await getSalesforceToken();
+    console.log("✅ Salesforce Auth Success");
 
+    // Step 2: Query Salesforce Contacts
     const soql = `
       SELECT Id, FirstName, LastName, Email, Phone, Sync__c
       FROM Contact
       WHERE Sync__c = true
     `;
 
-    const sfResponse = await fetch(
-      `https://capsule2.my.salesforce.com/services/data/v59.0/query?q=${encodeURIComponent(
-        soql
-      )}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+    const queryUrl = `${instanceUrl}/services/data/v59.0/query?q=${encodeURIComponent(soql)}`;
+    console.log("📡 Fetching Contacts from Salesforce...");
+
+    const sfResponse = await fetch(queryUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
       }
-    );
+    });
 
     const sfData = await sfResponse.json();
 
     if (!sfData.records) {
-      throw new Error("Invalid Salesforce response");
+      throw new Error("Invalid Salesforce response: " + JSON.stringify(sfData));
     }
+
+    console.log(`📊 Contacts Fetched: ${sfData.records.length}`);
 
     let inserted = 0;
 
@@ -248,14 +214,17 @@ app.post("/api/sync", validateSession, async (req, res) => {
       if (result.rowCount > 0) inserted++;
     }
 
+    console.log(`💾 Rows Inserted in Postgres: ${inserted}`);
+
     res.json({
       success: true,
-      message: "Sync completed successfully",
-      totalFetched: sfData.records.length,
-      inserted
+      message: "Salesforce Sync Completed Successfully",
+      fetched: sfData.records.length,
+      inserted: inserted
     });
+
   } catch (err) {
-    console.error("SYNC ERROR:", err.message);
+    console.error("❌ SYNC ERROR:", err);
     res.status(500).json({
       success: false,
       message: "Salesforce Sync Failed",
@@ -264,75 +233,38 @@ app.post("/api/sync", validateSession, async (req, res) => {
   }
 });
 
-/* =====================================================
-   ACTIVATE / DEACTIVATE USER
-===================================================== */
+/* ================= STATUS UPDATE ================= */
 app.post("/api/status", validateSession, async (req, res) => {
-  try {
-    const { id, status } = req.body;
-
-    await pool.query(
-      `UPDATE sfdc_contacts SET status=$1 WHERE salesforce_id=$2`,
-      [status, id]
-    );
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Status Update Error:", err);
-    res.status(500).json({ error: "Status update failed" });
-  }
+  const { id, status } = req.body;
+  await pool.query(
+    `UPDATE sfdc_contacts SET status=$1 WHERE salesforce_id=$2`,
+    [status, id]
+  );
+  res.json({ success: true });
 });
 
-/* =====================================================
-   RESET PASSWORD
-===================================================== */
+/* ================= PASSWORD RESET ================= */
 app.post("/api/password", validateSession, async (req, res) => {
-  try {
-    const { id, password } = req.body;
-
-    await pool.query(
-      `UPDATE sfdc_contacts 
-       SET contact_password=$1 
-       WHERE salesforce_id=$2`,
-      [password, id]
-    );
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Password Update Error:", err);
-    res.status(500).json({ error: "Password update failed" });
-  }
+  const { id, password } = req.body;
+  await pool.query(
+    `UPDATE sfdc_contacts SET contact_password=$1 WHERE salesforce_id=$2`,
+    [password, id]
+  );
+  res.json({ success: true });
 });
 
-/* =====================================================
-   LOGOUT
-===================================================== */
+/* ================= LOGOUT ================= */
 app.post("/api/logout", validateSession, async (req, res) => {
-  try {
-    await pool.query(
-      `UPDATE sfdc_contacts 
-       SET session_id=NULL, session_expiry=NULL 
-       WHERE session_id=$1`,
-      [req.headers.sessionid]
-    );
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Logout Error:", err);
-    res.status(500).json({ error: "Logout failed" });
-  }
+  await pool.query(
+    `UPDATE sfdc_contacts 
+     SET session_id=NULL, session_expiry=NULL 
+     WHERE session_id=$1`,
+    [req.headers.sessionid]
+  );
+  res.json({ success: true });
 });
 
-/* =====================================================
-   HEALTH CHECK
-===================================================== */
-app.get("/health", (req, res) => {
-  res.json({ status: "UP" });
-});
-
-/* =====================================================
-   START SERVER
-===================================================== */
+/* ================= SERVER ================= */
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
