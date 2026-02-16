@@ -1,1 +1,33 @@
 
+<!DOCTYPE html>
+<html>
+<head>
+<title>New Donor</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="sidebar">
+  <h5>Donor App</h5>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/donors-page">Donors</a>
+</div>
+
+<div class="content">
+  <h3>Create Donor</h3>
+
+  <form method="POST" action="/donors/new">
+    <input class="form-control mb-2" name="first_name" placeholder="First Name" required>
+    <input class="form-control mb-2" name="last_name" placeholder="Last Name">
+    <input class="form-control mb-2" name="email" placeholder="Email">
+    <input class="form-control mb-2" name="mobile" placeholder="Mobile">
+    <input class="form-control mb-2" name="city" placeholder="City">
+    <input class="form-control mb-2" name="state" placeholder="State">
+    <textarea class="form-control mb-2" name="remarks" placeholder="Remarks"></textarea>
+    <button class="btn btn-success">Save Donor</button>
+  </form>
+</div>
+
+</body>
+</html>
