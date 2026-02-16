@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -91,4 +90,32 @@ function searchDonor() {
 
       let info = `
         <strong>${d.first_name} ${d.last_name}</strong><br>
-        Email: ${
+        Email: ${d.email}<br>
+        Donor ID: ${d.donor_id}
+      `;
+
+      let div = document.getElementById("donorInfo");
+      div.innerHTML = info;
+      div.classList.remove("d-none");
+    } else {
+      alert("Donor not found");
+    }
+  });
+}
+
+fetch('/programs')
+.then(res => res.json())
+.then(data => {
+  let dropdown = document.getElementById("programDropdown");
+  data.forEach(p => {
+    let option = document.createElement("option");
+    option.value = p.id;
+    option.text = p.program_name;
+    dropdown.appendChild(option);
+  });
+});
+
+</script>
+
+</body>
+</html>
