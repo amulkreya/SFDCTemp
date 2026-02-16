@@ -3,18 +3,19 @@ import session from "express-session";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { Pool } from "pg";
-import bcrypt from "bcrypt";
+import pkg from "pg";
 
 dotenv.config();
+
+const { Pool } = pkg;
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// =======================
+// ===============================
 // DATABASE CONNECTION
-// =======================
+// ===============================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -22,24 +23,23 @@ const pool = new Pool({
   }
 });
 
-// =======================
+// ===============================
 // MIDDLEWARE
-// =======================
+// ===============================
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.use(session({
-  secret: process.env.SESSION_SECRET || "supersecret",
+  secret: process.env.SESSION_SECRET || "mysecret",
   resave: false,
-  saveUninitialized: false,
-  cookie: { secure: false }
+  saveUninitialized: false
 }));
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// =======================
+// ===============================
 // AUTH MIDDLEWARE
-// =======================
+// ===============================
 function isAuthenticated(req, res, next) {
   if (req.session.user) {
     return next();
@@ -47,9 +47,9 @@ function isAuthenticated(req, res, next) {
   res.redirect("/");
 }
 
-// =======================
+// ===============================
 // PAGE ROUTES
-// =======================
+// ===============================
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "views", "donorlogin.html"));
@@ -91,9 +91,9 @@ app.get("/new-expense-page", isAuthenticated, (req, res) => {
   res.sendFile(path.join(__dirname, "views", "new-expense.html"));
 });
 
-// =======================
-// LOGIN
-// =======================
+// ===============================
+// LOGIN (PLAIN TEXT PASSWORD)
+// ===============================
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
@@ -108,9 +108,8 @@ app.post("/login", async (req, res) => {
     }
 
     const user = result.rows[0];
-    const validPassword = await bcrypt.compare(password, user.password);
 
-    if (!validPassword) {
+    if (password !== user.password) {
       return res.send("Invalid password");
     }
 
@@ -118,23 +117,23 @@ app.post("/login", async (req, res) => {
     res.redirect("/dashboard");
 
   } catch (err) {
-    console.error(err);
+    console.error("Login Error:", err);
     res.send("Login error");
   }
 });
 
-// =======================
+// ===============================
 // LOGOUT
-// =======================
+// ===============================
 app.get("/logout", (req, res) => {
   req.session.destroy(() => {
     res.redirect("/");
   });
 });
 
-// =======================
+// ===============================
 // DONORS API
-// =======================
+// ===============================
 
 // Pagination (5 per page)
 app.get("/donors", isAuthenticated, async (req, res) => {
@@ -157,7 +156,6 @@ app.get("/donors", isAuthenticated, async (req, res) => {
 // Create donor
 app.post("/donors/new", isAuthenticated, async (req, res) => {
   const { first_name, last_name, email, mobile, city, state, remarks } = req.body;
-
   const donorId = "DN" + Date.now();
 
   try {
@@ -169,6 +167,7 @@ app.post("/donors/new", isAuthenticated, async (req, res) => {
     );
 
     res.redirect("/donors-page");
+
   } catch (err) {
     console.error(err);
     res.status(500).send("Error creating donor");
@@ -191,9 +190,9 @@ app.get("/donors/search", isAuthenticated, async (req, res) => {
   }
 });
 
-// =======================
+// ===============================
 // PROGRAMS API
-// =======================
+// ===============================
 app.get("/programs", isAuthenticated, async (req, res) => {
   try {
     const result = await pool.query(
@@ -221,9 +220,9 @@ app.post("/programs/new", isAuthenticated, async (req, res) => {
   }
 });
 
-// =======================
+// ===============================
 // DONATIONS API
-// =======================
+// ===============================
 app.post("/donations/new", isAuthenticated, async (req, res) => {
   const { donor_id, program_id, donation_amount, donation_date, payment_mode, remarks } = req.body;
 
@@ -236,15 +235,16 @@ app.post("/donations/new", isAuthenticated, async (req, res) => {
     );
 
     res.redirect("/donations-page");
+
   } catch (err) {
     console.error(err);
     res.status(500).send("Error creating donation");
   }
 });
 
-// =======================
+// ===============================
 // EXPENSES API
-// =======================
+// ===============================
 app.post("/expenses/new", isAuthenticated, async (req, res) => {
   const { program_id, expense_amount, expense_date, expense_description, submitted_by, status, remarks } = req.body;
 
@@ -257,15 +257,16 @@ app.post("/expenses/new", isAuthenticated, async (req, res) => {
     );
 
     res.redirect("/expenses-page");
+
   } catch (err) {
     console.error(err);
     res.status(500).send("Error creating expense");
   }
 });
 
-// =======================
+// ===============================
 // SERVER START
-// =======================
+// ===============================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
