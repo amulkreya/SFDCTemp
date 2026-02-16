@@ -92,7 +92,7 @@ app.get("/new-expense-page", isAuthenticated, (req, res) => {
 });
 
 // ===============================
-// LOGIN (PLAIN TEXT PASSWORD)
+// LOGIN (PLAIN TEXT)
 // ===============================
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
@@ -167,14 +167,13 @@ app.post("/donors/new", isAuthenticated, async (req, res) => {
     );
 
     res.redirect("/donors-page");
-
   } catch (err) {
     console.error(err);
     res.status(500).send("Error creating donor");
   }
 });
 
-// Search donor by mobile
+// Search donor
 app.get("/donors/search", isAuthenticated, async (req, res) => {
   const { mobile } = req.query;
 
@@ -193,6 +192,7 @@ app.get("/donors/search", isAuthenticated, async (req, res) => {
 // ===============================
 // PROGRAMS API
 // ===============================
+
 app.get("/programs", isAuthenticated, async (req, res) => {
   try {
     const result = await pool.query(
@@ -213,6 +213,7 @@ app.post("/programs/new", isAuthenticated, async (req, res) => {
       "INSERT INTO programs (program_name, description) VALUES ($1,$2)",
       [program_name, description]
     );
+
     res.redirect("/programs-page");
   } catch (err) {
     console.error(err);
@@ -223,6 +224,8 @@ app.post("/programs/new", isAuthenticated, async (req, res) => {
 // ===============================
 // DONATIONS API
 // ===============================
+
+// Create donation
 app.post("/donations/new", isAuthenticated, async (req, res) => {
   const { donor_id, program_id, donation_amount, donation_date, payment_mode, remarks } = req.body;
 
@@ -235,16 +238,35 @@ app.post("/donations/new", isAuthenticated, async (req, res) => {
     );
 
     res.redirect("/donations-page");
-
   } catch (err) {
     console.error(err);
     res.status(500).send("Error creating donation");
   }
 });
 
+// List donations
+app.get("/donations-list", isAuthenticated, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT d.*, dn.first_name, dn.last_name, p.program_name
+      FROM donations d
+      JOIN donors dn ON d.donor_id = dn.id
+      LEFT JOIN programs p ON d.program_id = p.id
+      ORDER BY d.id DESC
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error fetching donations" });
+  }
+});
+
 // ===============================
 // EXPENSES API
 // ===============================
+
+// Create expense
 app.post("/expenses/new", isAuthenticated, async (req, res) => {
   const { program_id, expense_amount, expense_date, expense_description, submitted_by, status, remarks } = req.body;
 
@@ -257,10 +279,26 @@ app.post("/expenses/new", isAuthenticated, async (req, res) => {
     );
 
     res.redirect("/expenses-page");
-
   } catch (err) {
     console.error(err);
     res.status(500).send("Error creating expense");
+  }
+});
+
+// List expenses
+app.get("/expenses-list", isAuthenticated, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT e.*, p.program_name
+      FROM expenses e
+      LEFT JOIN programs p ON e.program_id = p.id
+      ORDER BY e.id DESC
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error fetching expenses" });
   }
 });
 
