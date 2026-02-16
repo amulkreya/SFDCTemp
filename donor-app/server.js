@@ -1,122 +1,273 @@
-require('dotenv').config();
-const express = require('express');
-const session = require('express-session');
-const bodyParser = require('body-parser');
-const { Pool } = require('pg');
-const bcrypt = require('bcrypt');
+import express from "express";
+import session from "express-session";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+import { Pool } from "pg";
+import bcrypt from "bcrypt";
+
+dotenv.config();
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// =======================
+// DATABASE CONNECTION
+// =======================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static('public'));
+// =======================
+// MIDDLEWARE
+// =======================
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
 app.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || "supersecret",
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: false,
+  cookie: { secure: false }
 }));
 
+app.use(express.static(path.join(__dirname, "public")));
+
+// =======================
+// AUTH MIDDLEWARE
+// =======================
 function isAuthenticated(req, res, next) {
-  if (req.session.user) return next();
-  res.redirect('/');
+  if (req.session.user) {
+    return next();
+  }
+  res.redirect("/");
 }
 
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/views/login.html');
+// =======================
+// PAGE ROUTES
+// =======================
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "donorlogin.html"));
 });
 
-app.post('/login', async (req, res) => {
+app.get("/dashboard", isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "dashboard.html"));
+});
+
+app.get("/donors-page", isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "donors.html"));
+});
+
+app.get("/new-donor-page", isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "new-donor.html"));
+});
+
+app.get("/programs-page", isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "programs.html"));
+});
+
+app.get("/new-program-page", isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "new-program.html"));
+});
+
+app.get("/donations-page", isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "donations.html"));
+});
+
+app.get("/new-donation-page", isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "new-donation.html"));
+});
+
+app.get("/expenses-page", isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "expenses.html"));
+});
+
+app.get("/new-expense-page", isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "new-expense.html"));
+});
+
+// =======================
+// LOGIN
+// =======================
+app.post("/login", async (req, res) => {
   const { username, password } = req.body;
-  const result = await pool.query("SELECT * FROM admins WHERE username=$1", [username]);
 
-  if (result.rows.length > 0) {
-    const user = result.rows[0];
-    if (await bcrypt.compare(password, user.password)) {
-      req.session.user = user;
-      return res.redirect('/dashboard');
+  try {
+    const result = await pool.query(
+      "SELECT * FROM admins WHERE username = $1",
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.send("Invalid username");
     }
+
+    const user = result.rows[0];
+    const validPassword = await bcrypt.compare(password, user.password);
+
+    if (!validPassword) {
+      return res.send("Invalid password");
+    }
+
+    req.session.user = user;
+    res.redirect("/dashboard");
+
+  } catch (err) {
+    console.error(err);
+    res.send("Login error");
   }
-  res.send("Invalid credentials");
 });
 
-app.get('/dashboard', isAuthenticated, (req, res) => {
-  res.sendFile(__dirname + '/views/dashboard.html');
+// =======================
+// LOGOUT
+// =======================
+app.get("/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.redirect("/");
+  });
 });
 
--- DONORS WITH PAGINATION
-app.get('/donors', isAuthenticated, async (req, res) => {
+// =======================
+// DONORS API
+// =======================
+
+// Pagination (5 per page)
+app.get("/donors", isAuthenticated, async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = 5;
   const offset = (page - 1) * limit;
 
-  const result = await pool.query(
-    "SELECT * FROM donors ORDER BY id DESC LIMIT $1 OFFSET $2",
-    [limit, offset]
-  );
-
-  res.json(result.rows);
+  try {
+    const result = await pool.query(
+      "SELECT * FROM donors ORDER BY id DESC LIMIT $1 OFFSET $2",
+      [limit, offset]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error fetching donors" });
+  }
 });
 
--- CREATE DONOR
-app.post('/donors/new', isAuthenticated, async (req, res) => {
+// Create donor
+app.post("/donors/new", isAuthenticated, async (req, res) => {
   const { first_name, last_name, email, mobile, city, state, remarks } = req.body;
-  const donorId = 'DN' + Date.now();
 
-  await pool.query(
-    "INSERT INTO donors (donor_id, first_name, last_name, email, mobile, city, state, remarks) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-    [donorId, first_name, last_name, email, mobile, city, state, remarks]
-  );
+  const donorId = "DN" + Date.now();
 
-  res.redirect('/dashboard');
+  try {
+    await pool.query(
+      `INSERT INTO donors 
+      (donor_id, first_name, last_name, email, mobile, city, state, remarks)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [donorId, first_name, last_name, email, mobile, city, state, remarks]
+    );
+
+    res.redirect("/donors-page");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error creating donor");
+  }
 });
 
--- SEARCH DONOR BY MOBILE
-app.get('/search-donor', isAuthenticated, async (req, res) => {
+// Search donor by mobile
+app.get("/donors/search", isAuthenticated, async (req, res) => {
   const { mobile } = req.query;
-  const result = await pool.query("SELECT * FROM donors WHERE mobile=$1", [mobile]);
-  res.json(result.rows);
+
+  try {
+    const result = await pool.query(
+      "SELECT * FROM donors WHERE mobile = $1",
+      [mobile]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Search error" });
+  }
 });
 
--- CREATE PROGRAM
-app.post('/programs/new', isAuthenticated, async (req, res) => {
+// =======================
+// PROGRAMS API
+// =======================
+app.get("/programs", isAuthenticated, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM programs ORDER BY id DESC"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error fetching programs" });
+  }
+});
+
+app.post("/programs/new", isAuthenticated, async (req, res) => {
   const { program_name, description } = req.body;
 
-  await pool.query(
-    "INSERT INTO programs (program_name, description) VALUES ($1,$2)",
-    [program_name, description]
-  );
-
-  res.redirect('/dashboard');
+  try {
+    await pool.query(
+      "INSERT INTO programs (program_name, description) VALUES ($1,$2)",
+      [program_name, description]
+    );
+    res.redirect("/programs-page");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error creating program");
+  }
 });
 
--- CREATE DONATION
-app.post('/donations/new', isAuthenticated, async (req, res) => {
+// =======================
+// DONATIONS API
+// =======================
+app.post("/donations/new", isAuthenticated, async (req, res) => {
   const { donor_id, program_id, donation_amount, donation_date, payment_mode, remarks } = req.body;
 
-  await pool.query(
-    "INSERT INTO donations (donor_id, program_id, donation_amount, donation_date, payment_mode, remarks) VALUES ($1,$2,$3,$4,$5,$6)",
-    [donor_id, program_id, donation_amount, donation_date, payment_mode, remarks]
-  );
+  try {
+    await pool.query(
+      `INSERT INTO donations
+      (donor_id, program_id, donation_amount, donation_date, payment_mode, remarks)
+      VALUES ($1,$2,$3,$4,$5,$6)`,
+      [donor_id, program_id, donation_amount, donation_date, payment_mode, remarks]
+    );
 
-  res.redirect('/dashboard');
+    res.redirect("/donations-page");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error creating donation");
+  }
 });
 
--- CREATE EXPENSE
-app.post('/expenses/new', isAuthenticated, async (req, res) => {
+// =======================
+// EXPENSES API
+// =======================
+app.post("/expenses/new", isAuthenticated, async (req, res) => {
   const { program_id, expense_amount, expense_date, expense_description, submitted_by, status, remarks } = req.body;
 
-  await pool.query(
-    "INSERT INTO expenses (program_id, expense_amount, expense_date, expense_description, submitted_by, status, remarks) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-    [program_id, expense_amount, expense_date, expense_description, submitted_by, status, remarks]
-  );
+  try {
+    await pool.query(
+      `INSERT INTO expenses
+      (program_id, expense_amount, expense_date, expense_description, submitted_by, status, remarks)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [program_id, expense_amount, expense_date, expense_description, submitted_by, status, remarks]
+    );
 
-  res.redirect('/dashboard');
+    res.redirect("/expenses-page");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error creating expense");
+  }
 });
 
-app.listen(process.env.PORT, () => {
-  console.log("Server running...");
+// =======================
+// SERVER START
+// =======================
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Donor App Running on Port ${PORT}`);
 });
