@@ -1,1 +1,94 @@
 
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Create Donation</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="sidebar">
+  <h5>Donor App</h5>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/donations-page">Donations</a>
+</div>
+
+<div class="content">
+  <div class="card shadow">
+    <div class="card-header bg-dark text-white">
+      <h4>Create New Donation</h4>
+    </div>
+
+    <div class="card-body">
+
+      <!-- Search Donor -->
+      <div class="mb-3">
+        <label>Search Donor by Mobile</label>
+        <input type="text" id="mobileSearch" class="form-control">
+        <button class="btn btn-primary mt-2" onclick="searchDonor()">Search</button>
+      </div>
+
+      <!-- Donor Info -->
+      <div id="donorInfo" class="alert alert-info d-none"></div>
+
+      <form method="POST" action="/donations/new">
+
+        <input type="hidden" name="donor_id" id="donor_id">
+
+        <div class="mb-3">
+          <label>Donation Amount</label>
+          <input type="number" name="donation_amount" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+          <label>Date of Donation</label>
+          <input type="date" name="donation_date" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+          <label>Program</label>
+          <select name="program_id" id="programDropdown" class="form-select" required>
+            <option value="">Select Program</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label>Mode of Payment</label>
+          <select name="payment_mode" class="form-select">
+            <option>Cash</option>
+            <option>NEFT</option>
+            <option>UPI</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label>Remarks</label>
+          <textarea name="remarks" class="form-control"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-success">Save Donation</button>
+        <a href="/donations-page" class="btn btn-secondary">Cancel</a>
+
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<script>
+
+function searchDonor() {
+  let mobile = document.getElementById("mobileSearch").value;
+
+  fetch(`/donors/search?mobile=${mobile}`)
+  .then(res => res.json())
+  .then(data => {
+    if(data.length > 0) {
+      let d = data[0];
+
+      document.getElementById("donor_id").value = d.id;
+
+      let info = `
+        <strong>${d.first_name} ${d.last_name}</strong><br>
+        Email: ${
