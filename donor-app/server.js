@@ -16,12 +16,26 @@ const __dirname = path.dirname(__filename);
 // ===============================
 // DATABASE CONNECTION
 // ===============================
+
+if (!process.env.DATABASE_URL) {
+  console.error("❌ DATABASE_URL is missing in environment variables");
+  process.exit(1);
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  ssl: process.env.NODE_ENV === "production"
+    ? { rejectUnauthorized: false }
+    : false
 });
+
+// Test DB connection on startup (no logic change)
+pool.connect()
+  .then(() => console.log("✅ Connected to PostgreSQL"))
+  .catch(err => {
+    console.error("❌ Database connection error:", err);
+    process.exit(1);
+  });
 
 // ===============================
 // MIDDLEWARE
@@ -32,7 +46,11 @@ app.use(express.json());
 app.use(session({
   secret: process.env.SESSION_SECRET || "mysecret",
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: false   // keep false (Railway handles HTTPS)
+  }
 }));
 
 app.use(express.static(path.join(__dirname, "public")));
@@ -118,7 +136,7 @@ app.post("/login", async (req, res) => {
 
   } catch (err) {
     console.error("Login Error:", err);
-    res.send("Login error");
+    res.status(500).send("Login error");
   }
 });
 
@@ -308,5 +326,5 @@ app.get("/expenses-list", isAuthenticated, async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`Donor App Running on Port ${PORT}`);
+  console.log(`🚀 Donor App Running on Port ${PORT}`);
 });
